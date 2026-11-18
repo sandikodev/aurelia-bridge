@@ -1,0 +1,70 @@
+{
+  "name": "@aureliajs/bridge",
+  "version": "0.1.0",
+  "description": "Polyglot Framework Interop & Hypermedia Bridge for Aurelia 2 (<au-bridge> + au-htmx).",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js",
+      "default": "./dist/adapters/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsc -w -p tsconfig.build.json --preserveWatchOutput",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "aurelia",
+    "aurelia2",
+    "bridge",
+    "interop",
+    "polyglot",
+    "micro-frontend",
+    "react",
+    "vue",
+    "svelte",
+    "solid",
+    "preact",
+    "qwik",
+    "htmx"
+  ],
+  "author": "Sandikodev <androxoss@hotmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "aurelia": "^2.0.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "aurelia": { "optional": true },
+    "react": { "optional": true },
+    "react-dom": { "optional": true },
+    "vue": { "optional": true },
+    "svelte": { "optional": true },
+    "solid-js": { "optional": true },
+    "preact": { "optional": true },
+    "@builder.io/qwik": { "optional": true },
+    "htmx.org": { "optional": true }
+  },
+  "devDependencies": {
+    "@aurelia/platform-browser": "^2.0.0-rc.2",
+    "@aurelia/runtime-html": "^2.0.0-rc.2",
+    "aurelia": "^2.0.0-rc.2",
+    "jsdom": "^23.0.0",
+    "@types/jsdom": "^21.1.6",
+    "typescript": "5.9.3"
+  }
+}
