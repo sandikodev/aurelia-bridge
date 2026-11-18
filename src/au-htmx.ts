@@ -42,6 +42,11 @@ export class AuHtmx {
       return;
     }
 
+    // Default CSP safety: disable eval in HTMX expressions unless explicitly overridden by host app
+    if (htmx.config && typeof htmx.config === 'object' && htmx.config.allowEval === undefined) {
+      htmx.config.allowEval = false;
+    }
+
     htmx.process(this.element);
   }
 

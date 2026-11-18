@@ -109,6 +109,7 @@ export const IBridgeRegistry: IResolver<IBridgeRegistry> =
 export interface HtmxLike {
   process(elt: Element): void;
   trigger?(elt: Element, eventName: string, detail?: Record<string, unknown>): boolean;
+  config?: Record<string, unknown>;
 }
 
 /**
