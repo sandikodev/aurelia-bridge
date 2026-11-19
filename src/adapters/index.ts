@@ -39,7 +39,13 @@ function buildBridgeProps(
   props: Record<string, unknown>,
   onEvent?: BridgeMountContext['onEvent']
 ): Record<string, unknown> {
-  return onEvent ? { ...props, onEvent } : { ...props };
+  if (!onEvent) return { ...props };
+  return {
+    ...props,
+    onEvent,
+    onChange: (val: unknown) => onEvent('change', val),
+    onUpdate: (event: string, payload?: unknown) => onEvent(event, payload),
+  };
 }
 
 interface ReactLike {

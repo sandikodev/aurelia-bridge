@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Community Note:** `@aureliajs/bridge` is an independent open-source package by **Sandikodev ([@sandikodev](https://github.com/sandikodev))**. Real enterprise teams rarely rewrite an entire application overnight — they embed an existing React chart, a Vue design system widget, a Svelte 5 interactive control, or HTMX hypermedia regions inside Aurelia 2. `@aureliajs/bridge` makes that interop strictly typed, lazy, race-safe, and DI-native.
+>
+> 📖 **Kajian Arsitektur & Guiding Principles:** Baca [ARCHITECTURAL-STUDY.md](./ARCHITECTURAL-STUDY.md) untuk analisis komparatif mendalam antara manual wrapper docs.aurelia.io, implementasi ergonomis Sandikodev di `belajar/aureliajs`, dan cetak biru anti-labil penyempurnaan bridge.
 
 ---
 

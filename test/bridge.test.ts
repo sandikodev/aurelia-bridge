@@ -164,6 +164,72 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     dom.window.close();
   });
 
+  it('supports direct ergonomic binding with value.bind and on-change.bind', async () => {
+    const { dom, app, host } = createScopedAurelia();
+    let triggerChange: ((val: number) => void) | undefined;
+
+    const mockAdapter = defineBridgeAdapter<{ value: number }>({
+      framework: 'vue',
+      mount({ container, props, onEvent }) {
+        const span = container.ownerDocument.createElement('span');
+        span.className = 'val';
+        span.textContent = String(props.value);
+        container.appendChild(span);
+
+        triggerChange = (val: number) => {
+          onEvent?.('change', val);
+        };
+
+        return {
+          update(nextProps) {
+            if (nextProps.value !== undefined) {
+              span.textContent = String(nextProps.value);
+            }
+          },
+          destroy() {
+            container.innerHTML = '';
+          },
+        };
+      },
+    });
+
+    const AppShell = CustomElement.define(
+      {
+        name: 'ergonomic-test-shell',
+        template: `<au-bridge using="vue" component.bind="VueCounter" value.bind="count" on-change.bind="syncCount"></au-bridge>`,
+      },
+      class {
+        VueCounter = { name: 'VueCounter' };
+        count = 42;
+        syncCount = (next: number) => {
+          this.count = next;
+        };
+      }
+    );
+
+    app.register(
+      BridgeConfiguration.customize({ registerBuiltins: false, adapters: [mockAdapter] })
+    );
+    const vm = app.container.get(AppShell);
+    await app.app({ host, component: vm }).start();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(host.querySelector('.val')?.textContent).toBe('42');
+
+    // Aurelia ViewModel change -> Foreign component updates
+    vm.count = 43;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(host.querySelector('.val')?.textContent).toBe('43');
+
+    // Foreign component triggers onChange -> Aurelia ViewModel updates
+    triggerChange?.(100);
+    expect(vm.count).toBe(100);
+
+    await app.stop();
+    app.dispose();
+    dom.window.close();
+  });
+
   it('enhances existing DOM elements natively via `au-htmx` Custom Attribute without wrapper divs', async () => {
     const { dom, app, host } = createScopedAurelia();
     const processSpy = vi.fn();
@@ -203,7 +269,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     const reactInst = await createReactAdapter(mockReact, {
       createRoot: () => ({ render: reactRender, unmount: reactUnmount }),
     }).mount({ container: makeContainer(), component: () => null, props: { a: 1 }, onEvent });
-    expect(mockReact.createElement.mock.calls[0]?.[1]).toEqual({ a: 1, onEvent });
+    expect(mockReact.createElement.mock.calls[0]?.[1]).toMatchObject({ a: 1, onEvent });
     await reactInst.update({ a: 2 });
     await reactInst.destroy();
     expect(reactUnmount).toHaveBeenCalled();
@@ -224,7 +290,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
       props: { b: 2 },
       onEvent,
     });
-    expect(mockVue.h.mock.calls[0]?.[1]).toEqual({ b: 2, onEvent });
+    expect(mockVue.h.mock.calls[0]?.[1]).toMatchObject({ b: 2, onEvent });
     await vueInst.destroy();
     expect(vueUnmount).toHaveBeenCalled();
 
@@ -240,7 +306,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
       props: { c: 3 },
       onEvent,
     });
-    expect(mockSvelte.mount.mock.calls[0]?.[1]?.props).toEqual({ c: 3, onEvent });
+    expect(mockSvelte.mount.mock.calls[0]?.[1]?.props).toMatchObject({ c: 3, onEvent });
     await svelteInst.update({ c: 4 });
     expect(mockSvelte.mount).toHaveBeenCalledTimes(2);
     await svelteInst.destroy();
@@ -292,7 +358,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
       props: { p: 1 },
       onEvent,
     });
-    expect(mockPreact.h.mock.calls[0]?.[1]).toEqual({ p: 1, onEvent });
+    expect(mockPreact.h.mock.calls[0]?.[1]).toMatchObject({ p: 1, onEvent });
     await preactInst.destroy();
     expect(preactRender).toHaveBeenLastCalledWith(null, expect.anything());
 
@@ -305,7 +371,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
       props: { q: 1 },
       onEvent,
     });
-    expect(mockQwik.jsx.mock.calls[0]?.[1]).toEqual({ q: 1, onEvent });
+    expect(mockQwik.jsx.mock.calls[0]?.[1]).toMatchObject({ q: 1, onEvent });
     await qwikInst.update({ q: 2 });
     expect(qwikRender).toHaveBeenCalledTimes(2);
     await qwikInst.destroy();

@@ -65,13 +65,15 @@ export class AuBridge {
     type: 'custom-element',
     name: 'au-bridge',
     template: `<div ref="mountPoint" data-bridge-framework.bind="using"></div>`,
-    bindables: ['using', 'component', 'loader', 'props', 'onEvent'],
+    bindables: ['using', 'component', 'loader', 'props', 'value', 'onChange', 'onEvent'],
   } as const;
 
   public using: BridgeFramework = 'react';
   public component: BridgeComponentInput = null;
   public loader?: () => Promise<unknown>;
   public props: Record<string, unknown> = {};
+  public value?: unknown;
+  public onChange?: (val: unknown) => void;
   public onEvent?: BridgeEventHandler;
   public mountPoint?: HTMLElement;
 
@@ -83,14 +85,27 @@ export class AuBridge {
   private isAttached = false;
   private mountEpoch = 0;
 
+  private getEffectiveProps(): Record<string, unknown> {
+    return {
+      ...(this.props ?? {}),
+      ...(this.value !== undefined ? { value: this.value } : {}),
+    };
+  }
+
   async attached(): Promise<void> {
     this.isAttached = true;
     await this.mountBridge();
   }
 
-  propsChanged(newProps: Record<string, unknown>): void {
+  propsChanged(_newProps: Record<string, unknown>): void {
     if (this.instance) {
-      void this.instance.update(newProps ?? {});
+      void this.instance.update(this.getEffectiveProps());
+    }
+  }
+
+  valueChanged(_newValue: unknown): void {
+    if (this.instance) {
+      void this.instance.update(this.getEffectiveProps());
     }
   }
 
@@ -174,8 +189,12 @@ export class AuBridge {
       const mounted = await effectiveAdapter.mount({
         container,
         component: resolvedComponent,
-        props: this.props ?? {},
+        props: this.getEffectiveProps(),
         onEvent: (event: string, payload?: unknown) => {
+          if (event === 'change') {
+            this.value = payload;
+            this.onChange?.(payload);
+          }
           this.onEvent?.(event, payload);
           const EventCtor = this.platform.CustomEvent;
           if (EventCtor && typeof this.host.dispatchEvent === 'function') {
