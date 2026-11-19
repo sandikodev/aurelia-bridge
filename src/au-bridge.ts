@@ -31,36 +31,6 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
-async function resolveComponentInput(input: BridgeComponentInput): Promise<unknown> {
-  if (!input) return null;
-
-  // Support lazy factory loaders `() => import('./Chart.tsx')` or `async () => ...`:
-  if (typeof input === 'function' && input.length === 0) {
-    try {
-      const result = (input as () => unknown)();
-      if (isPromiseLike(result)) {
-        const loaded = await result;
-        if (loaded && typeof loaded === 'object' && 'default' in loaded) {
-          return (loaded as { default: unknown }).default;
-        }
-        return loaded;
-      }
-    } catch {
-      // If invoking threw (e.g. class requiring `new`), treat as direct component class
-    }
-  }
-
-  if (isPromiseLike(input)) {
-    const loaded = await input;
-    if (loaded && typeof loaded === 'object' && 'default' in loaded) {
-      return (loaded as { default: unknown }).default;
-    }
-    return loaded;
-  }
-
-  return input;
-}
-
 export class AuBridge {
   public static readonly $au: {
     readonly type: 'custom-element';
@@ -100,7 +70,7 @@ export class AuBridge {
 
   private getEffectiveProps(): Record<string, unknown> {
     return {
-      ...(this.props ?? {}),
+      ...(this.props),
       ...(this.value !== undefined ? { value: this.value } : {}),
     };
   }
