@@ -230,6 +230,73 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     dom.window.close();
   });
 
+  it('supports <aurelia-island> convention alias with type="react" and on-change.bind', async () => {
+    const { dom, app, host } = createScopedAurelia();
+
+    let triggerChange: ((next: unknown) => void) | undefined;
+    const mockAdapter = defineBridgeAdapter({
+      framework: 'react',
+      mount(ctx) {
+        triggerChange = (next: unknown) => ctx.onEvent?.('change', next);
+        const span = dom.window.document.createElement('span');
+        span.className = 'island-val';
+        span.textContent = String(ctx.props.value ?? '');
+        ctx.container.appendChild(span);
+        return {
+          update(newProps) {
+            span.textContent = String(newProps.value ?? '');
+          },
+          destroy() {
+            span.remove();
+          },
+        };
+      },
+    });
+
+    const IslandShell = CustomElement.define(
+      {
+        name: 'island-shell',
+        template: `
+          <aurelia-island
+            type="react"
+            component.bind="ReactCounter"
+            value.bind="sharedCounter"
+            on-change.bind="syncCounter">
+          </aurelia-island>
+        `,
+      },
+      class {
+        ReactCounter = { name: 'ReactCounter' };
+        sharedCounter = 10;
+        syncCounter = (next: number) => {
+          this.sharedCounter = next;
+        };
+      }
+    );
+
+    app.register(
+      BridgeConfiguration.customize({ registerBuiltins: false, adapters: [mockAdapter] })
+    );
+    const vm = app.container.get(IslandShell);
+    await app.app({ host, component: vm }).start();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(host.querySelector('.island-val')?.textContent).toBe('10');
+
+    // Aurelia -> Island update
+    vm.sharedCounter = 25;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(host.querySelector('.island-val')?.textContent).toBe('25');
+
+    // Island -> Aurelia update
+    triggerChange?.(99);
+    expect(vm.sharedCounter).toBe(99);
+
+    await app.stop();
+    app.dispose();
+    dom.window.close();
+  });
+
   it('enhances existing DOM elements natively via `au-htmx` Custom Attribute without wrapper divs', async () => {
     const { dom, app, host } = createScopedAurelia();
     const processSpy = vi.fn();

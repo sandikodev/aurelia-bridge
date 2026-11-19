@@ -3,7 +3,7 @@
  */
 
 import { Registration, type IContainer, type IRegistry } from 'aurelia';
-import { AuBridge } from './au-bridge.js';
+import { AuBridge, AureliaIsland } from './au-bridge.js';
 import { AuHtmx } from './au-htmx.js';
 import { IBridgeRegistry, IHtmx, type BridgePluginOptions } from './types.js';
 import { BridgeRegistry, createDefaultBridgeRegistry } from './adapters/index.js';
@@ -28,6 +28,7 @@ export const BridgeConfiguration: IRegistry & {
     return container.register(
       Registration.instance(IBridgeRegistry, createDefaultBridgeRegistry()),
       AuBridge,
+      AureliaIsland,
       AuHtmx
     );
   },
@@ -38,6 +39,7 @@ export const BridgeConfiguration: IRegistry & {
         const registrations: unknown[] = [
           Registration.instance(IBridgeRegistry, registry),
           AuBridge,
+          AureliaIsland,
           AuHtmx,
         ];
         if (options.htmx) {

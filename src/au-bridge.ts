@@ -62,20 +62,27 @@ async function resolveComponentInput(input: BridgeComponentInput): Promise<unkno
 }
 
 export class AuBridge {
-  public static readonly $au = {
+  public static readonly $au: {
+    readonly type: 'custom-element';
+    readonly name: string;
+    readonly template: string;
+    readonly bindables: readonly string[];
+  } = {
     type: 'custom-element',
     name: 'au-bridge',
-    template: `<div ref="mountPoint" data-bridge-framework.bind="using"></div>`,
-    bindables: ['using', 'component', 'loader', 'props', 'value', 'onChange', 'onEvent'],
-  } as const;
+    template: `<div ref="mountPoint" data-bridge-framework.bind="getEffectiveFramework()"></div>`,
+    bindables: ['using', 'type', 'component', 'loader', 'props', 'value', 'onChange', 'onUpdate', 'onEvent'],
+  };
 
   public using: BridgeFramework = 'react';
+  public type?: BridgeFramework;
   public component: BridgeComponentInput = null;
   public loader?: () => Promise<unknown>;
   public props: Record<string, unknown> = {};
   public value?: unknown;
   public onChange?: (val: unknown) => void;
   public onEvent?: BridgeEventHandler;
+  public onUpdate?: BridgeEventHandler;
   public mountPoint?: HTMLElement;
 
   private readonly host = resolve(INode) as HTMLElement;
@@ -86,6 +93,10 @@ export class AuBridge {
   private instance: BridgeInstance | null = null;
   private isAttached = false;
   private mountEpoch = 0;
+
+  public getEffectiveFramework(): BridgeFramework {
+    return this.type ?? this.using ?? 'react';
+  }
 
   private getEffectiveProps(): Record<string, unknown> {
     return {
@@ -137,6 +148,21 @@ export class AuBridge {
     }
   }
 
+  async typeChanged(newType: BridgeFramework): Promise<void> {
+    if (newType) {
+      this.using = newType;
+    }
+    if (this.isAttached) {
+      await this.remountBridge();
+    }
+  }
+
+  onUpdateChanged(handler: BridgeEventHandler): void {
+    if (handler && !this.onEvent) {
+      this.onEvent = handler;
+    }
+  }
+
   async detaching(): Promise<void> {
     this.isAttached = false;
     this.mountEpoch++;
@@ -176,7 +202,8 @@ export class AuBridge {
       }
 
       let resolvedComponent: unknown = rawLoaded;
-      let effectiveAdapter = this.registry.get(this.using);
+      const fw = this.getEffectiveFramework();
+      let effectiveAdapter = this.registry.get(fw);
 
       if (rawLoaded && typeof rawLoaded === 'object') {
         const asObj = rawLoaded as Record<string, unknown>;
@@ -187,7 +214,7 @@ export class AuBridge {
       }
 
       if (!effectiveAdapter) {
-        console.warn(`[@aureliajs/bridge] No adapter registered for framework: "${this.using}".`);
+        console.warn(`[@aureliajs/bridge] No adapter registered for framework: "${fw}".`);
         return;
       }
 
@@ -206,13 +233,14 @@ export class AuBridge {
             this.onChange?.(payload);
           }
           this.onEvent?.(event, payload);
+          this.onUpdate?.(event, payload);
           const EventCtor = this.platform.CustomEvent;
           if (EventCtor && typeof this.host.dispatchEvent === 'function') {
             this.host.dispatchEvent(
               new EventCtor('bridge-event', {
                 bubbles: true,
                 composed: true,
-                detail: { framework: this.using, event, payload },
+                detail: { framework: fw, event, payload },
               })
             );
           }
@@ -226,7 +254,7 @@ export class AuBridge {
 
       this.instance = mounted;
     } catch (err) {
-      console.error(`[@aureliajs/bridge] Error mounting "${this.using}" component:`, err);
+      console.error(`[@aureliajs/bridge] Error mounting "${this.getEffectiveFramework()}" component:`, err);
     }
   }
 
@@ -237,4 +265,18 @@ export class AuBridge {
       await current.destroy();
     }
   }
+}
+
+/**
+ * Universal Convention Island (<aurelia-island>)
+ * Backward-compatible alias for <au-bridge> allowing:
+ * <aurelia-island type="react" component.bind="ReactCounter" value.bind="count" on-change.bind="sync">
+ */
+export class AureliaIsland extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'aurelia-island',
+    template: `<div ref="mountPoint" data-bridge-framework.bind="getEffectiveFramework()"></div>`,
+    bindables: ['type', 'using', 'component', 'loader', 'props', 'value', 'onChange', 'onUpdate', 'onEvent'] as const,
+  };
 }
