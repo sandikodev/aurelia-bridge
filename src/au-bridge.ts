@@ -12,6 +12,7 @@
  */
 
 import { INode, IPlatform, optional, resolve } from 'aurelia';
+import { ISSRContext } from '@aurelia/runtime-html';
 import {
   IBridgeRegistry,
   type BridgeAdapter,
@@ -79,6 +80,7 @@ export class AuBridge {
 
   private readonly host = resolve(INode) as HTMLElement;
   private readonly platform = resolve(IPlatform);
+  private readonly ssrContext = resolve(optional(ISSRContext));
   private readonly registry: IBridgeRegistry =
     resolve(optional(IBridgeRegistry)) ?? createDefaultBridgeRegistry();
   private instance: BridgeInstance | null = null;
@@ -94,28 +96,36 @@ export class AuBridge {
 
   async attached(): Promise<void> {
     this.isAttached = true;
+    // SSR Safe Guard: In server-side rendering, skip client mounting of foreign runtimes
+    if (this.ssrContext) {
+      return;
+    }
     await this.mountBridge();
   }
 
   propsChanged(_newProps: Record<string, unknown>): void {
+    if (this.ssrContext) return;
     if (this.instance) {
       void this.instance.update(this.getEffectiveProps());
     }
   }
 
   valueChanged(_newValue: unknown): void {
+    if (this.ssrContext) return;
     if (this.instance) {
       void this.instance.update(this.getEffectiveProps());
     }
   }
 
   async componentChanged(): Promise<void> {
+    if (this.ssrContext) return;
     if (this.isAttached) {
       await this.remountBridge();
     }
   }
 
   async loaderChanged(): Promise<void> {
+    if (this.ssrContext) return;
     if (this.isAttached) {
       await this.remountBridge();
     }
