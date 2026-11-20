@@ -380,7 +380,9 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
       const buildQwikProps = (props: Record<string, unknown>): Record<string, unknown> => {
         const out: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(props)) {
-          if (typeof v === 'function') {
+          // Only wrap event handlers / closures in QRL boundaries.
+          // Keep data accessors/getters (like value: () => number) as pure callable functions.
+          if (typeof v === 'function' && (k.startsWith('on') || k.endsWith('$'))) {
             out[k] = wrapQrl(v as (...args: unknown[]) => unknown, `qwik_${k}`);
           } else {
             out[k] = v;
@@ -389,7 +391,10 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
         if (context.onEvent) {
           const onEvt = context.onEvent;
           const onEventQrl = wrapQrl(onEvt as (...args: unknown[]) => unknown, 'qwik_bridge_onEvent');
-          const onChangeQrl = wrapQrl((val: unknown) => onEvt('change', val), 'qwik_bridge_onChange');
+          const onChangeQrl = wrapQrl((val: unknown) => {
+            currentProps.value = val;
+            onEvt('change', val);
+          }, 'qwik_bridge_onChange');
           const onUpdateQrl = wrapQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onUpdate');
 
           out.onEvent = onEventQrl;
@@ -406,11 +411,10 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
 
       const doRender = async () => {
         try {
-          if (host && host.parentNode) {
-            host.remove();
+          if (!host || !host.parentNode) {
+            host = doc.createElement('div');
+            context.container.appendChild(host);
           }
-          host = doc.createElement('div');
-          context.container.appendChild(host);
           const rootNode = host.getRootNode();
           if (rootNode !== doc && win?.qwikevents?.push) {
             try {
@@ -438,8 +442,17 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           return host ?? context.container;
         },
         async update(nextProps) {
+          let hasChanged = false;
+          for (const key of Object.keys(nextProps)) {
+            if (currentProps[key] !== nextProps[key]) {
+              hasChanged = true;
+              break;
+            }
+          }
           currentProps = { ...currentProps, ...nextProps };
-          await doRender();
+          if (hasChanged) {
+            await doRender();
+          }
         },
         destroy() {
           context.container.innerHTML = '';
