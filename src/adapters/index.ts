@@ -391,10 +391,7 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
         if (context.onEvent) {
           const onEvt = context.onEvent;
           const onEventQrl = wrapQrl(onEvt as (...args: unknown[]) => unknown, 'qwik_bridge_onEvent');
-          const onChangeQrl = wrapQrl((val: unknown) => {
-            currentProps.value = val;
-            onEvt('change', val);
-          }, 'qwik_bridge_onChange');
+          const onChangeQrl = wrapQrl((val: unknown) => onEvt('change', val), 'qwik_bridge_onChange');
           const onUpdateQrl = wrapQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onUpdate');
 
           out.onEvent = onEventQrl;
