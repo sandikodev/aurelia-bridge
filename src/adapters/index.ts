@@ -320,6 +320,7 @@ export function createPreactAdapter(preactModule?: PreactLike): BridgeAdapter {
 interface QwikLike {
   render(parent: HTMLElement, jsxNode: unknown): Promise<unknown> | unknown;
   jsx(component: unknown, props: Record<string, unknown>): unknown;
+  $(fn: (...args: unknown[]) => unknown): unknown;
   inlinedQrl?(fn: (...args: unknown[]) => unknown, symbol: string): unknown;
 }
 
@@ -330,6 +331,10 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
   return {
     framework: 'qwik',
     async mount(context: BridgeMountContext): Promise<BridgeInstance> {
+      if (typeof globalThis !== 'undefined') {
+        (globalThis as any).qRuntimeQrl = true;
+      }
+
       const qwik = (qwikModule ??
         (await import('@builder.io/qwik'))) as QwikLike;
       const { render, jsx } = qwik;
@@ -362,26 +367,30 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
       let host: HTMLElement | undefined;
       let currentProps: Record<string, unknown> = { ...context.props };
 
+      const wrapQrl = (fn: (...args: unknown[]) => unknown, name: string) => {
+        if (typeof qwik.$ === 'function') {
+          return qwik.$(fn);
+        }
+        if (typeof qwik.inlinedQrl === 'function') {
+          return qwik.inlinedQrl(fn, name);
+        }
+        return fn;
+      };
+
       const buildQwikProps = (props: Record<string, unknown>): Record<string, unknown> => {
         const out: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(props)) {
-          if (typeof v === 'function' && qwik.inlinedQrl) {
-            out[k] = qwik.inlinedQrl(v as (...args: unknown[]) => unknown, `qwik_${k}`);
+          if (typeof v === 'function') {
+            out[k] = wrapQrl(v as (...args: unknown[]) => unknown, `qwik_${k}`);
           } else {
             out[k] = v;
           }
         }
         if (context.onEvent) {
           const onEvt = context.onEvent;
-          const onEventQrl = qwik.inlinedQrl
-            ? qwik.inlinedQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onEvent')
-            : onEvt;
-          const onChangeQrl = qwik.inlinedQrl
-            ? qwik.inlinedQrl((val: unknown) => onEvt('change', val), 'qwik_bridge_onChange')
-            : (val: unknown) => onEvt('change', val);
-          const onUpdateQrl = qwik.inlinedQrl
-            ? qwik.inlinedQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onUpdate')
-            : (e: unknown, p: unknown) => onEvt(e as string, p);
+          const onEventQrl = wrapQrl(onEvt as (...args: unknown[]) => unknown, 'qwik_bridge_onEvent');
+          const onChangeQrl = wrapQrl((val: unknown) => onEvt('change', val), 'qwik_bridge_onChange');
+          const onUpdateQrl = wrapQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onUpdate');
 
           out.onEvent = onEventQrl;
           out.onEvent$ = onEventQrl;
