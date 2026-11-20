@@ -190,6 +190,25 @@ We document each built-in adapter's real runtime mechanics ([src/adapters/index.
 | :--- | :--- | :--- |
 | `@aureliajs/bridge` | `aurelia` | `BridgeConfiguration`, `AuBridge`, `AuHtmx`, `IBridgeRegistry`, `IHtmx`, `BridgeRegistry`, `createDefaultBridgeRegistry`, `defineBridgeAdapter`, all 6 `create*Adapter()` factories, generic types |
 | `@aureliajs/bridge/adapters` | **None (0 KB Aurelia)** | `BridgeRegistry`, `createDefaultBridgeRegistry`, `createReactAdapter`, `createVueAdapter`, `createSvelteAdapter`, `createSolidAdapter`, `createPreactAdapter`, `createQwikAdapter` (usable directly with `@aureliajs/islands/loader` on Zero-JS pages!) |
+| `@aureliajs/bridge/vite` | `vite` | `bridge()`, `bridgePlugin` (Zero-boilerplate Vite plugin providing on-the-fly compilation for Vue SFCs, Svelte 5 runes, SolidJS JSX, and dev mock endpoints) |
+
+### Zero-Boilerplate Vite Plugin (`@aureliajs/bridge/vite`)
+
+To avoid configuring Babel, `@vue/compiler-sfc`, and Svelte compilers manually in your `vite.config.ts`, simply add `bridge()`:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import aurelia from '@aurelia/vite-plugin';
+import { bridge } from '@aureliajs/bridge/vite';
+
+export default defineConfig({
+  plugins: [
+    bridge(),
+    aurelia({ useDev: false }),
+  ],
+});
+```
 
 ---
 
