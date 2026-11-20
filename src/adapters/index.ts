@@ -351,13 +351,16 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           if (!win.qwikevents) {
             win.qwikevents = ['click', 'input', 'change', 'keydown', 'keyup'];
           }
-          const { QWIK_LOADER } = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER: string };
-          if (QWIK_LOADER) {
-            new Function('document', 'window', QWIK_LOADER)(doc, win);
-          }
+          await import('@builder.io/qwik/qwikloader.js');
         } catch {
           try {
-            await import('@builder.io/qwik/qwikloader.js');
+            const { QWIK_LOADER } = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER: string };
+            if (QWIK_LOADER) {
+              const script = doc.createElement('script');
+              script.textContent = QWIK_LOADER;
+              doc.head.appendChild(script);
+              script.remove();
+            }
           } catch {
             // loader not available or simulated mock environment
           }
@@ -394,7 +397,7 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           const onChangeQrl = wrapQrl((val: unknown) => onEvt('change', val), 'qwik_bridge_onChange');
           const onUpdateQrl = wrapQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onUpdate');
 
-          out.onEvent = onEventQrl;
+          out.onEvent = onEvt;
           out.onEvent$ = onEventQrl;
           out.onChange = onChangeQrl;
           out.onChange$ = onChangeQrl;
@@ -408,6 +411,10 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
 
       const doRender = async () => {
         try {
+          // Yield to event loop to allow any pending Qwik renderMarked microtasks to settle
+          // before detaching the old container, preventing "element must be connected to the dom".
+          await new Promise((r) => setTimeout(r, 10));
+
           // Qwik refuses to render over an existing q:container (Code 5),
           // so every render mounts into a fresh host element.
           if (host && host.parentNode) {
