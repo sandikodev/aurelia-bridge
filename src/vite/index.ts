@@ -138,6 +138,26 @@ export function bridge(options: BridgeViteOptions = {}): MinimalVitePlugin {
         };
       }
 
+      // 4. Preact TSX/JSX (Automatic JSX Pragma)
+      if (cleanId.includes('preact') && (cleanId.endsWith('.tsx') || cleanId.endsWith('.jsx'))) {
+        if (!code.includes('@jsxImportSource')) {
+          return {
+            code: `/** @jsxImportSource preact */\n${code}`,
+            map: null,
+          };
+        }
+      }
+
+      // 5. Qwik TSX/JSX (Automatic JSX Pragma)
+      if (cleanId.includes('qwik') && (cleanId.endsWith('.tsx') || cleanId.endsWith('.jsx'))) {
+        if (!code.includes('@jsxImportSource')) {
+          return {
+            code: `/** @jsxImportSource @builder.io/qwik */\n${code}`,
+            map: null,
+          };
+        }
+      }
+
       return null;
     },
     configureServer(server) {

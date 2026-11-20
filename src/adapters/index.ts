@@ -336,8 +336,7 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
 
       context.container.innerHTML = '';
       const doc = context.container.ownerDocument;
-      const host = doc.createElement('div');
-      context.container.appendChild(host);
+      let host: HTMLElement | undefined;
 
       let currentProps: Record<string, unknown> = { ...context.props };
 
@@ -375,16 +374,30 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
       };
 
       const doRender = async () => {
-        await render(
-          host,
-          jsx(context.component, buildQwikProps(currentProps))
-        );
+        try {
+          if (host && host.parentNode) {
+            host.remove();
+          }
+          host = doc.createElement('div');
+          context.container.appendChild(host);
+          await render(
+            host,
+            jsx(context.component, buildQwikProps(currentProps))
+          );
+        } catch (err) {
+          if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+            throw err;
+          }
+          console.warn('[@aureliajs/bridge] Qwik render notice:', err);
+        }
       };
 
       await doRender();
 
       return {
-        nativeInstance: host,
+        get nativeInstance() {
+          return host ?? context.container;
+        },
         async update(nextProps) {
           currentProps = { ...currentProps, ...nextProps };
           await doRender();
