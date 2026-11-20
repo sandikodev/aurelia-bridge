@@ -12,7 +12,9 @@
     "noEmit": true,
     "types": ["bun-types", "node"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@aureliajs/bridge": ["../src/index.ts"],
+      "@aureliajs/bridge/*": ["../src/*"]
     }
   },
   "include": ["src/**/*", "test/**/*", "preload.ts"],
