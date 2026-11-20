@@ -76,6 +76,8 @@ export function bridge(options: BridgeViteOptions = {}): MinimalVitePlugin {
             'preact',
             'preact/hooks',
             '@builder.io/qwik',
+            '@builder.io/qwik/loader',
+            '@builder.io/qwik/qwikloader.js',
             'htmx.org',
           ],
         },

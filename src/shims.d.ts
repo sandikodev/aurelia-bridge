@@ -6,6 +6,8 @@ declare module 'solid-js/web';
 declare module 'solid-js';
 declare module 'preact';
 declare module '@builder.io/qwik';
+declare module '@builder.io/qwik/loader';
+declare module '@builder.io/qwik/qwikloader.js';
 declare module 'htmx.org';
 
 // Build Toolchain & Compiler Shims

@@ -336,8 +336,30 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
 
       context.container.innerHTML = '';
       const doc = context.container.ownerDocument;
-      let host: HTMLElement | undefined;
+      const win = (doc?.defaultView || (typeof window !== 'undefined' ? window : null)) as any;
 
+      // Automatically initialize Qwikloader for event delegation (capture listeners).
+      // Convention over configuration: Qwik requires qwikloader running on document/window
+      // to intercept native events and dispatch them to inlined QRL boundaries.
+      if (win && doc && !('__q_context__' in doc)) {
+        try {
+          if (!win.qwikevents) {
+            win.qwikevents = ['click', 'input', 'change', 'keydown', 'keyup'];
+          }
+          const { QWIK_LOADER } = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER: string };
+          if (QWIK_LOADER) {
+            new Function('document', 'window', QWIK_LOADER)(doc, win);
+          }
+        } catch {
+          try {
+            await import('@builder.io/qwik/qwikloader.js');
+          } catch {
+            // loader not available or simulated mock environment
+          }
+        }
+      }
+
+      let host: HTMLElement | undefined;
       let currentProps: Record<string, unknown> = { ...context.props };
 
       const buildQwikProps = (props: Record<string, unknown>): Record<string, unknown> => {
@@ -380,6 +402,14 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           }
           host = doc.createElement('div');
           context.container.appendChild(host);
+          const rootNode = host.getRootNode();
+          if (rootNode !== doc && win?.qwikevents?.push) {
+            try {
+              win.qwikevents.push(rootNode);
+            } catch {
+              // ignore
+            }
+          }
           await render(
             host,
             jsx(context.component, buildQwikProps(currentProps))
