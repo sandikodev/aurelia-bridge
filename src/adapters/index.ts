@@ -352,15 +352,24 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
         }
         if (context.onEvent) {
           const onEvt = context.onEvent;
-          out.onEvent = qwik.inlinedQrl
+          const onEventQrl = qwik.inlinedQrl
             ? qwik.inlinedQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onEvent')
             : onEvt;
-          out.onChange = qwik.inlinedQrl
+          const onChangeQrl = qwik.inlinedQrl
             ? qwik.inlinedQrl((val: unknown) => onEvt('change', val), 'qwik_bridge_onChange')
             : (val: unknown) => onEvt('change', val);
-          out.onUpdate = qwik.inlinedQrl
+          const onUpdateQrl = qwik.inlinedQrl
             ? qwik.inlinedQrl((e: unknown, p: unknown) => onEvt(e as string, p), 'qwik_bridge_onUpdate')
             : (e: unknown, p: unknown) => onEvt(e as string, p);
+
+          out.onEvent = onEventQrl;
+          out.onEvent$ = onEventQrl;
+          out.onChange = onChangeQrl;
+          out.onChange$ = onChangeQrl;
+          out.onCounterChange = onChangeQrl;
+          out.onCounterChange$ = onChangeQrl;
+          out.onUpdate = onUpdateQrl;
+          out.onUpdate$ = onUpdateQrl;
         }
         return out;
       };
