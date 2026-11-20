@@ -408,10 +408,13 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
 
       const doRender = async () => {
         try {
-          if (!host || !host.parentNode) {
-            host = doc.createElement('div');
-            context.container.appendChild(host);
+          // Qwik refuses to render over an existing q:container (Code 5),
+          // so every render mounts into a fresh host element.
+          if (host && host.parentNode) {
+            host.remove();
           }
+          host = doc.createElement('div');
+          context.container.appendChild(host);
           const rootNode = host.getRootNode();
           if (rootNode !== doc && win?.qwikevents?.push) {
             try {
