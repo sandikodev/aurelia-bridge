@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@aurelia/metadata": "^2.0.0-rc.2",
-    "@aureliajs/bridge": "workspace:*",
+    "@aureliajs/bridge": "link:..",
     "@builder.io/qwik": "1.20.4",
     "aurelia": "^2.0.0-rc.2",
     "htmx.org": "^2.0.4",
