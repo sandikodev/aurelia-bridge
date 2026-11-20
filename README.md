@@ -91,7 +91,7 @@ export class AnalyticsPage {
 ```
 
 ```html
-<!-- Immediate mount inside Aurelia -->
+<!-- 1. Immediate mount inside Aurelia (Standard props) -->
 <au-bridge
   using="react"
   loader.bind="loadChart"
@@ -99,7 +99,15 @@ export class AnalyticsPage {
   on-event.bind="handleBridgeEvent">
 </au-bridge>
 
-<!-- Combine with @aureliajs/islands for lazy viewport mounting (0 KB React until visible) -->
+<!-- 2. Shorthand two-way binding for counters, forms, and inputs -->
+<au-bridge
+  using="vue"
+  component.bind="VueCounter"
+  value.bind="sharedCount"
+  on-change.bind="handleCountChange">
+</au-bridge>
+
+<!-- 3. Orthogonal composition with @aureliajs/islands for lazy viewport mounting (0 KB React until visible) -->
 <au-bridge
   island="visible"
   using="react"
@@ -111,10 +119,20 @@ export class AnalyticsPage {
 
 ### 3. Hypermedia Regions with `au-htmx`
 
+Enhance any DOM node directly with HTMX without wrapping extra `<div>` elements:
+
 ```html
 <section au-htmx hx-get="/partials/activity-feed" hx-trigger="revealed" hx-swap="innerHTML">
   Loading feed...
 </section>
+
+<!-- Direct hypermedia swap inside Aurelia components -->
+<div au-htmx>
+  <button hx-get="/api/stats" hx-target="#stats-panel" hx-swap="innerHTML">
+    Refresh Stats
+  </button>
+  <div id="stats-panel"></div>
+</div>
 ```
 
 ### 4. Authoring a Custom Adapter (`defineBridgeAdapter`)
