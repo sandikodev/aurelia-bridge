@@ -320,7 +320,7 @@ export function createPreactAdapter(preactModule?: PreactLike): BridgeAdapter {
 interface QwikLike {
   render(parent: HTMLElement, jsxNode: unknown): Promise<unknown> | unknown;
   jsx(component: unknown, props: Record<string, unknown>): unknown;
-  $(fn: (...args: unknown[]) => unknown): unknown;
+  $?(fn: (...args: unknown[]) => unknown): unknown;
   inlinedQrl?(fn: (...args: unknown[]) => unknown, symbol: string): unknown;
 }
 
