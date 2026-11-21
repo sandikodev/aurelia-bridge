@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Community Note:** `@aureliajs/bridge` is an independent open-source package by **Sandikodev ([@sandikodev](https://github.com/sandikodev))**. Real enterprise teams rarely rewrite an entire application overnight — they embed an existing React chart, a Vue design system widget, a Svelte 5 interactive control, or HTMX hypermedia regions inside Aurelia 2. `@aureliajs/bridge` makes that interop strictly typed, lazy, race-safe, and DI-native.
+> **Community Note:** `@aureliajs/bridge` is an independent open-source package by **Sandikodev ([@sandikodev](https://github.com/sandikodev))**. Real enterprise teams rarely rewrite an entire application overnight — they embed an existing React chart, a Vue design system widget, a Svelte 5 interactive control, or HTMX hypermedia regions inside Aurelia 2. `@aureliajs/bridge` makes that interop strictly typed, lazy, race-safe, DI-native, and follows **Convention over Configuration**.
 >
 > 📖 **Architectural Study & Guiding Principles:** Read [ARCHITECTURAL-STUDY.md](./ARCHITECTURAL-STUDY.md) for an in-depth comparative analysis between the manual wrappers from docs.aurelia.io, ergonomic community implementations, and our resilient blueprint for foreign framework interop.
 
@@ -15,29 +15,80 @@
 ## 1. Scope & Strict Boundaries
 
 ### What `@aureliajs/bridge` OWNS (**WHAT** foreign UI runtime mounts inside Aurelia)
-- `<au-bridge>` native Aurelia 2 Custom Element (`static readonly $au`) for mounting foreign UI subtrees with lazy `() => import(...)` loaders, reactive `props` forwarding, standardized `bridge-event` dispatch, and deterministic teardown.
-- `au-htmx` native Aurelia 2 Custom Attribute (`static readonly $au`) for enhancing existing DOM elements directly with HTMX — zero wrapper `<div>`s.
-- Container-scoped `IBridgeRegistry` DI service (never a global mutable map!).
-- 6 lazy built-in adapters (`React 18/19`, `Vue 3`, `Svelte 5`, `SolidJS`, `Preact`, `Qwik`) plus `defineBridgeAdapter()` for any custom runtime (Lit, Angular Elements, Three.js, D3, WebGL).
+- **Dedicated Convention Custom Elements**: `<au-react>`, `<au-vue>`, `<au-svelte>`, `<au-solid>`, `<au-preact>`, `<au-qwik>`, `<au-lit>` — zero-configuration wrappers with built-in framework pinning.
+- **Universal `<au-bridge>` Custom Element**: Mounts foreign UI subtrees with **Automatic Framework Detection**, unified `component.bind` (eager classes, promises, or `() => import(...)`), reactive props forwarding, standardized `bridge-event` dispatch, and deterministic DI teardown.
+- **Default Two-Way Value Binding**: `value.bind="count"` is two-way by default (`BindingMode.twoWay`) — eliminates tedious `on-change.bind="(v) => count = v"` synchronization boilerplate.
+- **`au-htmx` Native Custom Attribute**: Enhances existing DOM elements directly with HTMX (`hx-get`, `hx-post`, `hx-swap`) — zero wrapper `<div>`s — and **automatically enhances Aurelia components in swapped fragments** via `htmx:afterSwap`.
+- **Container-Scoped DI Services**: `IBridgeRegistry` and `IHtmx` services (never global mutable singletons!).
+- **7 Built-in Lazy Adapters**: React 18/19, Vue 3, Svelte 5, SolidJS, Preact, Qwik, and Lit / W3C Custom Elements, plus `defineBridgeAdapter()` for any custom runtime (Three.js, D3, Monaco, MapLibre).
+- **Smart Vite Plugin (`@aureliajs/bridge/vite`)**: On-the-fly compilation for Vue SFCs, Svelte 5 Runes, SolidJS JSX, and automatic dependency pre-bundling tailored strictly to installed packages.
 
 ### What `@aureliajs/bridge` Explicitly DOES NOT OWN (**WHEN / HOW** components hydrate)
-- `IntersectionObserver`, `requestIdleCallback`, `matchMedia`, or Zero-JS SSR island loading. Those concerns live in [`@aureliajs/islands`](../aurelia-islands/README.md) and compose orthogonally by adding `island="visible"` directly onto `<au-bridge>`.
+- `IntersectionObserver`, `requestIdleCallback`, `matchMedia`, or Zero-JS SSR island loading. Those concerns live in [`@aureliajs/islands`](../aurelia-islands/README.md) and compose orthogonally by adding `island="visible"` directly onto any bridge element (e.g. `<au-react island="visible">`).
 
 ---
 
 ## 2. How It Works Under the Hood
 
+```mermaid
+flowchart TD
+    subgraph AureliaApp["Aurelia 2 Application"]
+        A["<au-react>, <au-vue>, <au-svelte>, or <au-bridge>"]
+        B["au-htmx (Custom Attribute)"]
+        C["IBridgeRegistry (Container DI)"]
+    end
+
+    subgraph CoreEngine["Bridge Engine Core"]
+        D["Automatic Framework Detection\n(detectFramework)"]
+        E["Monotonic Epoch Counter\n(mountEpoch Race Guard)"]
+        F["Two-Way Value Binding\n(BindingMode.twoWay)"]
+    end
+
+    subgraph Adapters["Built-in Adapters (src/adapters/index.ts)"]
+        G1["React 18/19 Adapter"]
+        G2["Vue 3 Adapter"]
+        G3["Svelte 5 Adapter"]
+        G4["SolidJS Adapter"]
+        G5["Preact Adapter"]
+        G6["Qwik Adapter"]
+        G7["Lit / Web Components Adapter"]
+        G8["defineBridgeAdapter() Custom"]
+    end
+
+    subgraph Hypermedia["HTMX 2.0 Integration"]
+        H["htmx.process(element)"]
+        I["htmx:afterSwap -> au.enhance()"]
+    end
+
+    A --> D
+    D --> E
+    E -->|Lookup via DI| C
+    C --> Adapters
+    A <-->|Two-Way Sync| F
+    B --> H
+    H --> I
+```
+
 1. **Container-Scoped DI (`IBridgeRegistry` & `IHtmx`)**:
-   - `BridgeConfiguration` registers a fresh `BridgeRegistry` instance **per Aurelia DI container** (`Registration.instance(IBridgeRegistry, ...)`).
-   - Two apps or parallel tests running in the same process never pollute each other's adapter registries.
-2. **Race-Safe Async Mounting (`mountEpoch`)**:
-   - Loading a foreign chunk (`loader.bind="() => import('./Chart.tsx')"`) and dynamically importing `react` / `react-dom/client` are asynchronous.
-   - If the user navigates away or changes `using`/`component` before the `import()` finishes, a monotonic `mountEpoch` counter inside [src/au-bridge.ts](./src/au-bridge.ts) immediately discards stale mounts and calls `destroy()` on any late-resolved instance — preventing orphaned roots and memory leaks.
-3. **Standardized Bi-Directional Communication**:
-   - **Aurelia → Foreign**: Bind `props.bind="chartData"`. Whenever `props` changes, `AuBridge` calls `instance.update(nextProps)`.
-   - **Foreign → Aurelia**: Every adapter injects `onEvent(eventName, payload)`. Calling it triggers both the bound `on-event.bind` callback AND dispatches a bubbling, shadow-crossing `CustomEvent('bridge-event', { detail: { framework, event, payload } })` on `<au-bridge>`.
-4. **Zero-Wrapper Hypermedia (`au-htmx`)**:
-   - Because `au-htmx` is an Aurelia Custom Attribute (`<section au-htmx hx-get="/feed">`), it calls `htmx.process(hostElement)` directly on `attached()` and removes no semantic HTML structure. HTMX can be supplied via DI (`BridgeConfiguration.customize({ htmx })`) or discovered automatically from `window.htmx`.
+   `BridgeConfiguration` registers a fresh `BridgeRegistry` instance **per Aurelia DI container** (`Registration.instance(IBridgeRegistry, ...)`). Two apps, micro-frontends, or parallel tests running in the same process never pollute each other's adapter registries.
+2. **Automatic Framework Detection (`detectFramework`)**:
+   When using `<au-bridge component.bind="MyWidget">`, the engine automatically detects the foreign ecosystem by inspecting component metadata:
+   - Vue 3: detects `__vccOpts`, `setup`, or `.vue` SFC format.
+   - Svelte 5 / 4: detects `$$render`, `$$`, or `.svelte` signatures.
+   - Lit / Web Components: detects `HTMLElement` prototype or hyphenated tag name.
+   - Qwik: detects `component$`, `qrl`, or resumability markers.
+   - React / Preact / Solid: falls back cleanly or uses dedicated tags (`<au-solid>`, `<au-preact>`, `<au-react>`).
+3. **Race-Safe Async Mounting (`mountEpoch`)**:
+   Dynamic imports (`component.bind="() => import('./Chart.tsx')"`) are asynchronous. If the user navigates away or switches tabs before the `import()` finishes, a monotonic `mountEpoch` counter inside [src/au-bridge.ts](./src/au-bridge.ts) immediately discards stale mounts and calls `destroy()` on any late-resolved instance — preventing orphaned DOM nodes and memory leaks.
+4. **Two-Way Value Binding by Default**:
+   `value.bind` uses `BindingMode.twoWay`. When a foreign component invokes its `onChange(newValue)` callback, Aurelia automatically updates the bound ViewModel property without needing manual `on-change.bind="(v) => prop = v"`.
+5. **Standardized Bi-Directional Event Protocol**:
+   - **Aurelia → Foreign**: Props update reactively via `instance.update(nextProps)`.
+   - **Foreign → Aurelia**: Foreign components can invoke generic `onEvent(eventName, payload)` or callbacks like `onSelect(val)`, `onSubmit(data)`. The bridge triggers bound callbacks and dispatches a bubbling, shadow-crossing W3C `CustomEvent('bridge-event', { detail: { framework, event, payload } })` on the host element.
+6. **Error Boundary & Event Bubbling**:
+   If a foreign component fails to mount or throws an error, the bridge invokes `on-error.bind="handleError"` and dispatches `bridge-error` (`detail: { framework, error }`).
+7. **Zero-Wrapper Hypermedia (`au-htmx`) with Swapped-Fragment Enhancement**:
+   `au-htmx` is an Aurelia Custom Attribute (`<section au-htmx hx-get="/feed">`). On `attached()`, it calls `htmx.process(element)`. Crucially, on `htmx:afterSwap`, it automatically calls `new Aurelia(container).enhance({ host: target })`, ensuring any nested Aurelia components or bridge elements inside the server-swapped HTML fragment come to life immediately!
 
 ---
 
@@ -45,9 +96,11 @@
 
 ```bash
 bun add @aureliajs/bridge aurelia
+# or npm / pnpm / yarn
+npm install @aureliajs/bridge aurelia
 ```
 
-All foreign framework packages (`react`, `react-dom`, `vue`, `svelte`, `solid-js`, `preact`, `@builder.io/qwik`, `htmx.org`) are **optional peer dependencies** — install only the ones you actually mount.
+All foreign framework packages (`react`, `react-dom`, `vue`, `svelte`, `solid-js`, `preact`, `@builder.io/qwik`, `lit`, `htmx.org`) are **optional peer dependencies** (`peerDependenciesMeta: optional: true`) — install only the ones your application actually uses.
 
 ---
 
@@ -60,10 +113,11 @@ import Aurelia from 'aurelia';
 import { BridgeConfiguration } from '@aureliajs/bridge';
 import { App } from './app.js';
 
+// Standard registration (registers <au-bridge>, all 7 dedicated elements, and au-htmx)
 Aurelia.register(BridgeConfiguration).app(App).start();
 ```
 
-Customizing per container (e.g., adding custom adapters, disabling built-ins, or injecting `htmx` via DI):
+Customizing per container (e.g., adding custom adapters, disabling built-ins, or injecting an explicit `htmx` instance):
 
 ```ts
 Aurelia.register(
@@ -75,70 +129,142 @@ Aurelia.register(
 ).app(App).start();
 ```
 
-### 2. Mount Foreign Components with `<au-bridge>`
+---
+
+### 2. Mounting Foreign Components
+
+#### Option A: Dedicated Convention Elements (Recommended)
+
+Dedicated custom elements provide the cleanest DX by eliminating the `using="..."` attribute:
 
 ```ts
-export class AnalyticsPage {
-  chartProps = { metric: 'MRR', value: 42 };
+// analytics-dashboard.ts
+import { ReactChart } from './react/ReactChart';
+import VueDataGrid from './vue/VueDataGrid.vue';
+import SvelteCounter from './svelte/SvelteCounter.svelte';
 
-  // Dynamic import keeps React + Recharts out of the initial Aurelia bundle
-  loadChart = () => import('./react/RevenueChart.tsx');
+export class AnalyticsDashboard {
+  public ReactChart = ReactChart;
+  public VueDataGrid = VueDataGrid;
+  public SvelteCounter = SvelteCounter;
 
-  handleBridgeEvent = (event: string, payload: unknown) => {
-    console.log('From React:', event, payload);
-  };
+  public chartData = { metric: 'MRR', value: 42000 };
+  public sharedCount = 10;
+
+  // Dynamic import keeps the bundle slim until needed
+  public loadHeavyWidget = () => import('./solid/SolidWidget');
+
+  public handleChartEvent(event: string, payload: unknown) {
+    console.log('Chart event:', event, payload);
+  }
 }
 ```
 
 ```html
-<!-- 1. Dedicated Convention Elements (<au-react>, <au-vue>, <au-svelte>, <au-solid>, <au-preact>, <au-qwik>, <au-lit>) -->
+<!-- analytics-dashboard.html -->
+
+<!-- 1. React 19 via <au-react> -->
 <au-react
-  component.bind="loadChart"
-  props.bind="chartProps"
-  on-event.bind="handleBridgeEvent">
+  component.bind="ReactChart"
+  props.bind="chartData"
+  on-event.bind="handleChartEvent">
 </au-react>
 
-<!-- 2. Two-way binding by default on value.bind (zero on-change boilerplate) -->
+<!-- 2. Vue 3 SFC with Two-Way Value Binding (<au-vue>) -->
+<!-- When Vue triggers onChange(20), sharedCount updates automatically in Aurelia! -->
 <au-vue
-  component.bind="VueCounter"
+  component.bind="VueDataGrid"
   value.bind="sharedCount">
 </au-vue>
 
-<!-- 3. Generic <au-bridge> with Automatic Framework Detection -->
-<au-bridge
-  component.bind="SvelteWidget"
+<!-- 3. Svelte 5 Runes via <au-svelte> -->
+<au-svelte
+  component.bind="SvelteCounter"
   value.bind="sharedCount">
-</au-bridge>
+</au-svelte>
 
-<!-- 4. Orthogonal composition with @aureliajs/islands for lazy viewport mounting (0 KB React until visible) -->
+<!-- 4. SolidJS with Lazy Dynamic Import (<au-solid>) -->
+<au-solid
+  component.bind="loadHeavyWidget"
+  props.bind="{ theme: 'dark' }">
+</au-solid>
+
+<!-- 5. Preact (<au-preact>) -->
+<au-preact
+  component.bind="PreactWidget"
+  value.bind="sharedCount">
+</au-preact>
+
+<!-- 6. Qwik Resumable (<au-qwik>) -->
+<au-qwik
+  component.bind="QwikWidget"
+  value.bind="sharedCount">
+</au-qwik>
+
+<!-- 7. Lit / Web Components (<au-lit>) -->
+<au-lit
+  component="my-custom-tag"
+  props.bind="{ active: true }">
+</au-lit>
+```
+
+#### Option B: Universal `<au-bridge>` with Automatic Detection
+
+If you prefer a single universal tag, `<au-bridge>` automatically detects the target framework:
+
+```html
+<!-- Automatically detected as Vue 3 SFC -->
+<au-bridge component.bind="VueDataGrid" value.bind="sharedCount"></au-bridge>
+
+<!-- Automatically detected as Svelte 5 -->
+<au-bridge component.bind="SvelteCounter" value.bind="sharedCount"></au-bridge>
+
+<!-- Explicit override if needed -->
+<au-bridge using="react" component.bind="ReactChart" props.bind="chartData"></au-bridge>
+```
+
+#### Option C: Orthogonal Composition with `@aureliajs/islands`
+
+Delay downloading and mounting foreign frameworks until visible on screen:
+
+```html
+<!-- 0 KB React downloaded until the chart enters the viewport! -->
 <au-react
   island="visible"
   component.bind="loadChart"
-  props.bind="chartProps">
+  props.bind="chartData">
 </au-react>
 ```
 
+---
+
 ### 3. Hypermedia Regions with `au-htmx`
 
-Enhance any DOM node directly with HTMX without wrapping extra `<div>` elements:
+Enhance any HTML5 semantic element directly without wrapper `<div>` nodes:
 
 ```html
+<!-- Direct Hypermedia Trigger on Semantic Elements -->
 <section au-htmx hx-get="/partials/activity-feed" hx-trigger="revealed" hx-swap="innerHTML">
   Loading feed...
 </section>
 
-<!-- Direct hypermedia swap inside Aurelia components -->
+<!-- Automatic Aurelia Enhancement on Swapped Content -->
 <div au-htmx>
-  <button hx-get="/api/stats" hx-target="#stats-panel" hx-swap="innerHTML">
-    Refresh Stats
+  <button class="btn btn-primary" hx-get="/api/widgets" hx-target="#widget-zone" hx-swap="innerHTML">
+    ⚡ Fetch Server Partial
   </button>
-  <div id="stats-panel"></div>
+  <div id="widget-zone">
+    <!-- Any <au-react>, <au-vue>, or Aurelia component inside the fetched HTML fragment
+         is automatically compiled and enhanced by Aurelia! -->
+  </div>
 </div>
 ```
 
+---
+
 ### 4. Authoring a Custom Adapter (`defineBridgeAdapter`)
 
-Any imperative library (Lit, D3, Three.js, MapLibre, Monaco Editor) fits cleanly into the same lifecycle contract:
+Any third-party or imperative library (Monaco Editor, D3, Three.js, MapLibre) can be bridged using the standard contract:
 
 ```ts
 import { defineBridgeAdapter } from '@aureliajs/bridge';
@@ -151,8 +277,13 @@ interface MapProps {
 export const mapAdapter = defineBridgeAdapter<MapProps>({
   framework: 'maplibre',
   mount({ container, props, onEvent }) {
-    const map = createMap(container, props);
-    map.on('click', (coords) => onEvent?.('map:click', coords));
+    const map = new maplibregl.Map({
+      container,
+      center: props.center,
+      zoom: props.zoom,
+    });
+
+    map.on('click', (e) => onEvent?.('click', e.lngLat));
 
     return {
       nativeInstance: map,
@@ -168,34 +299,53 @@ export const mapAdapter = defineBridgeAdapter<MapProps>({
 });
 ```
 
+Register it in your Aurelia configuration:
+
+```ts
+Aurelia.register(
+  BridgeConfiguration.customize({
+    adapters: [mapAdapter],
+  })
+);
+```
+
+And mount it seamlessly:
+
+```html
+<au-bridge using="maplibre" component.bind="mapInstance" props.bind="mapSettings"></au-bridge>
+```
+
 ---
 
 ## 5. Built-in Adapters: Exact Behavior & Honest Trade-offs
 
-We document each built-in adapter's real runtime mechanics ([src/adapters/index.ts](./src/adapters/index.ts)) openly so there are no surprises:
+We openly document each adapter's runtime mechanics ([src/adapters/index.ts](./src/adapters/index.ts)):
 
-| Framework (`using="..."`) | Underlying Mount API | How `update(nextProps)` Works | Honest Trade-offs / Notes |
-| :--- | :--- | :--- | :--- |
-| **`react`** | `ReactDOM.createRoot(el)` + `root.render(...)` | Re-renders root with merged props | Full React 18/19 concurrent root support; clean `root.unmount()`. |
-| **`vue`** | `createApp({ render: () => h(Comp, reactiveProps) })` | Mutates Vue `reactive()` object via `Object.assign` | Preserves Vue component internal state across prop updates; clean `app.unmount()`. |
-| **`svelte`** | Svelte 5 `mount(Comp, { target, props })` | Calls `$set()` if Svelte 4; on Svelte 5 currently calls `unmount()` + re-`mount()` | **Open improvement area**: wrapping props in Svelte 5 `$state` proxy (when available) would preserve internal Svelte 5 component state across prop updates without remounting! |
-| **`solid`** | `render(() => Comp(reactiveProxy), el)` + `createSignal` | Updates signal via `setProps()`, read lazily through a `Proxy` | Fine-grained reactivity without remounting the Solid tree; clean `dispose()`. |
-| **`preact`** | `render(h(Comp, props), el)` | Re-renders VNode into container | Tiny footprint; teardown calls `render(null, el)`. |
-| **`qwik`** | Client-side `render(host, jsx(Comp, props))` | Re-renders JSX node into host | **Honest note**: runs Qwik's client renderer inside Aurelia, *not* Qwik City's server-side QRL resumability pipeline. |
+| Framework | Element Tag | Underlying Mount API | How `update(nextProps)` Works | Honest Trade-offs / Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **`react`** | `<au-react>` | `ReactDOM.createRoot(el)` + `root.render(...)` | Re-renders root with merged props | Full React 18/19 concurrent root support; clean `root.unmount()`. |
+| **`vue`** | `<au-vue>` | `createApp({ render: () => h(Comp, reactiveProps) })` | Mutates Vue `reactive()` object via `Object.assign` | Preserves Vue component internal state across prop updates; clean `app.unmount()`. |
+| **`svelte`** | `<au-svelte>` | Svelte 5 `mount(Comp, { target, props })` | Calls `$set()` if Svelte 4; on Svelte 5 calls `unmount()` + re-`mount()` | Clean Svelte 5 Runes support. Wrapping props in `$state` proxy can be explored in future Svelte releases. |
+| **`solid`** | `<au-solid>` | `render(() => Comp(reactiveProxy), el)` + `createSignal` | Updates signal via `setProps()`, read through reactive `Proxy` | Fine-grained reactivity without remounting the Solid tree; clean `dispose()`. |
+| **`preact`** | `<au-preact>` | `render(h(Comp, props), el)` | Re-renders VNode into container | Ultra-small (3 KB) footprint; teardown calls `render(null, el)`. |
+| **`qwik`** | `<au-qwik>` | Client-side `render(host, jsx(Comp, props))` + Qwikloader | Re-renders JSX node into host | Runs Qwik client renderer inside Aurelia with inlined QRL event boundaries; teardown clears container. |
+| **`lit`** | `<au-lit>` | `document.createElement(tag)` or `new CustomElementClass()` | Reflects props directly onto element properties | Zero external runtime overhead; standard W3C Web Component lifecycle. |
 
 ---
 
-## 6. Subpath Contract
+## 6. Subpath Contract & Key Exports
 
 | Subpath | Runtime Dependencies | Key Exports |
 | :--- | :--- | :--- |
-| `@aureliajs/bridge` | `aurelia` | `BridgeConfiguration`, `AuBridge`, `AuHtmx`, `IBridgeRegistry`, `IHtmx`, `BridgeRegistry`, `createDefaultBridgeRegistry`, `defineBridgeAdapter`, all 6 `create*Adapter()` factories, generic types |
-| `@aureliajs/bridge/adapters` | **None (0 KB Aurelia)** | `BridgeRegistry`, `createDefaultBridgeRegistry`, `createReactAdapter`, `createVueAdapter`, `createSvelteAdapter`, `createSolidAdapter`, `createPreactAdapter`, `createQwikAdapter` (usable directly with `@aureliajs/islands/loader` on Zero-JS pages!) |
-| `@aureliajs/bridge/vite` | `vite` | `bridge()`, `bridgePlugin` (Zero-boilerplate Vite plugin providing on-the-fly compilation for Vue SFCs, Svelte 5 runes, SolidJS JSX, and dev mock endpoints) |
+| **`@aureliajs/bridge`** | `aurelia` | `BridgeConfiguration`, `AuBridge`, `<au-react>` (`AuReact`), `<au-vue>` (`AuVue`), `<au-svelte>` (`AuSvelte`), `<au-solid>` (`AuSolid`), `<au-preact>` (`AuPreact`), `<au-qwik>` (`AuQwik`), `<au-lit>` (`AuLit`), `AuHtmx`, `detectFramework`, `IBridgeRegistry`, `IHtmx`, `BridgeRegistry`, `createDefaultBridgeRegistry`, `defineBridgeAdapter`, all 7 `create*Adapter()` factories, generic types |
+| **`@aureliajs/bridge/adapters`** | **None (0 KB Aurelia)** | `BridgeRegistry`, `createDefaultBridgeRegistry`, `createReactAdapter`, `createVueAdapter`, `createSvelteAdapter`, `createSolidAdapter`, `createPreactAdapter`, `createQwikAdapter`, `createLitAdapter` (usable independently with `@aureliajs/islands/loader` on Zero-JS pages) |
+| **`@aureliajs/bridge/vite`** | `vite` | `bridge()`, `bridgePlugin` (Smart Vite plugin providing on-the-fly compilation for Vue SFCs, Svelte 5 runes, SolidJS JSX, HTMX dev mock endpoints, and selective pre-bundling) |
 
-### Zero-Boilerplate Vite Plugin (`@aureliajs/bridge/vite`)
+---
 
-To avoid configuring Babel, `@vue/compiler-sfc`, and Svelte compilers manually in your `vite.config.ts`, simply add `bridge()`:
+## 7. Smart Vite Plugin (`@aureliajs/bridge/vite`)
+
+To avoid configuring Babel, `@vue/compiler-sfc`, and Svelte compilers manually in your `vite.config.ts`, simply include `bridge()`:
 
 ```ts
 // vite.config.ts
@@ -211,21 +361,28 @@ export default defineConfig({
 });
 ```
 
----
-
-## 7. Open Areas for Community Contributions
-
-1. **Non-Remounting Svelte 5 Props Bridge**: Preserve internal Svelte 5 component state on `update(nextProps)` without `unmount()` + re-`mount()`.
-2. **Deep / Key-Level Prop Diffing Option**: Currently `AuBridge.propsChanged()` fires when the `props` object reference changes (immutable style). Adding optional shallow-equality or deep observation helpers for mutable objects can be explored cleanly.
-3. **Server-Side Fallback / SSR Bridge Hooks**: Optional `renderToString` hook on `BridgeAdapter` so `<au-bridge>` can optionally pre-render React/Vue HTML during `@aureliajs/ssr` renders instead of leaving an empty mount container until client boot.
+### Why it's smart:
+- **Selective Dependency Optimization**: Inspects your project's `package.json` and only adds installed frameworks to Vite's `optimizeDeps.include`. If you only use React, it will never warn about missing Vue or Svelte packages!
+- **Automatic JSX Pragmas**: Automatically applies `@jsxImportSource preact` or `@builder.io/qwik` for relevant files.
+- **Built-in Dev Mock API**: Automatically provides a live hypermedia mock endpoint at `/api/htmx-demo` for rapid prototyping.
 
 ---
 
-## 8. Testing
+## 8. Testing & Development
+
+Run the comprehensive test suite across unit and integration tests:
 
 ```bash
 cd packages/aurelia-bridge
-bun run build
-bun run typecheck
-bun test
+bun run build        # Typecheck and compile dist/
+bun run typecheck    # Validate strict TypeScript types
+bun test             # Run package test suite & example tests
+```
+
+To run the interactive polyglot example application:
+
+```bash
+cd packages/aurelia-bridge/example
+bun install
+bun run dev          # Starts Vite dev server at http://localhost:5173
 ```

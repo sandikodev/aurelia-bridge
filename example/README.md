@@ -17,53 +17,53 @@ The official Aurelia 2 guides for hosting foreign components (*"React inside Aur
 - Manually handling imperative framework lifecycles: `createRoot`, `flushSync`, `shallowReactive`, `markRaw`, `mount()`, and `unmount()`.
 - Synchronizing bidirectional reactive state through imperatively attached listeners and custom change events.
 
-In this showcase, **all manual glue code is 100% eliminated**:
+In this showcase, **all manual glue code is 100% eliminated** using dedicated convention elements with default two-way value binding:
 
 ```html
-<!-- Single Declarative Aurelia Element mounts any supported foreign runtime -->
-<au-bridge 
-  using="react" 
+<!-- Dedicated Convention Elements with Two-Way Value Binding -->
+<!-- 1. React 19 -->
+<au-react 
   component.bind="ReactCounter" 
   value.bind="sharedCounter" 
-  on-change.bind="handleCounterUpdate">
-</au-bridge>
+  on-change.bind="(v) => handleCounterUpdate(v, 'React 19')">
+</au-react>
 
-<au-bridge 
-  using="vue" 
+<!-- 2. Vue 3 SFC -->
+<au-vue 
   component.bind="VueCounter" 
   value.bind="sharedCounter" 
-  on-change.bind="handleCounterUpdate">
-</au-bridge>
+  on-change.bind="(v) => handleCounterUpdate(v, 'Vue 3 SFC')">
+</au-vue>
 
-<au-bridge 
-  using="svelte" 
+<!-- 3. Svelte 5 Runes -->
+<au-svelte 
   component.bind="SvelteCounter" 
   value.bind="sharedCounter" 
-  on-change.bind="handleCounterUpdate">
-</au-bridge>
+  on-change.bind="(v) => handleCounterUpdate(v, 'Svelte 5 Runes')">
+</au-svelte>
 
-<au-bridge 
-  using="solid" 
+<!-- 4. SolidJS JSX -->
+<au-solid 
   component.bind="SolidCounter" 
   value.bind="sharedCounter" 
-  on-change.bind="handleCounterUpdate">
-</au-bridge>
+  on-change.bind="(v) => handleCounterUpdate(v, 'SolidJS')">
+</au-solid>
 
-<au-bridge 
-  using="preact" 
+<!-- 5. Preact (3 KB) -->
+<au-preact 
   component.bind="PreactCounter" 
   value.bind="sharedCounter" 
-  on-change.bind="handleCounterUpdate">
-</au-bridge>
+  on-change.bind="(v) => handleCounterUpdate(v, 'Preact 3kB')">
+</au-preact>
 
-<au-bridge 
-  using="qwik" 
+<!-- 6. Qwik Resumable -->
+<au-qwik 
   component.bind="QwikCounter" 
   value.bind="sharedCounter" 
-  on-change.bind="handleCounterUpdate">
-</au-bridge>
+  on-change.bind="(v) => handleCounterUpdate(v, 'Qwik Resumable')">
+</au-qwik>
 
-<!-- Pure Hypermedia Component via au-htmx -->
+<!-- 7. Pure Hypermedia Component via au-htmx -->
 <htmx-card></htmx-card>
 ```
 

@@ -229,24 +229,36 @@ app.get('/bridge', aurelia(BridgePage));
 ```
 `BridgePage` is authored as an `.aux` file or a paired `bridge-page.ts` + `bridge-page.html`. Server-side rendering is handled transparently by `@hono/aurelia` and `@aureliajs/ssr`.
 
-### Principle 2: First-Class Dual-Binding Support in `<au-bridge>`
-`<au-bridge>` supports two first-class binding styles:
-1. **Direct Component Shorthand:**
+### Principle 2: Convention-over-Configuration & Dedicated Elements
+`<au-bridge>` eliminates boilerplate through three primary conventions:
+1. **Dedicated Framework Elements with Default Two-Way Value Binding:**
    ```html
-   <au-bridge 
-     using="react" 
+   <!-- Zero using="..." configuration, zero manual on-change.bind -->
+   <au-react 
      component.bind="ReactCounter" 
-     value.bind="sharedCounter" 
-     on-change.bind="handleCounterUpdate">
-   </au-bridge>
+     value.bind="sharedCounter">
+   </au-react>
+
+   <au-vue 
+     component.bind="VueCounter" 
+     value.bind="sharedCounter">
+   </au-vue>
    ```
-2. **Enterprise Lazy Props (Code-Splitting):**
+2. **Unified `component.bind` for Code-Splitting & Eager Classes:**
    ```html
-   <au-bridge 
-     using="react" 
-     loader.bind="loadHeavyChart" 
+   <!-- Single unified bindable accepts eager components, promises, or import factories -->
+   <au-react 
+     component.bind="() => import('./react/HeavyChart')" 
      props.bind="{ theme: 'dark', series: data }" 
      on-event.bind="handleEvent">
+   </au-react>
+   ```
+3. **Automatic Framework Detection on Universal `<au-bridge>`:**
+   ```html
+   <!-- Automatically detected as Vue 3 SFC via __vccOpts / .vue metadata -->
+   <au-bridge 
+     component.bind="VueCounter" 
+     value.bind="sharedCounter">
    </au-bridge>
    ```
 
@@ -266,14 +278,20 @@ Synthetic Views (`ViewFactory` + `Scope`) are **internal engine primitives**, no
 
 ## 6. Realized Enhancements & Roadmap Alignment
 
-1. **`@aureliajs/bridge` Core API (`src/au-bridge.ts`):**
-   - Direct `value` and `onChange` bindables on the `AuBridge` class.
-   - `component` accepts direct component classes or async loader functions interchangeably.
-2. **`examples/aurelia-bridge` Canonical Showcase:**
+1. **Dedicated Convention Elements (`<au-react>`, `<au-vue>`, `<au-svelte>`, etc.):**
+   - Direct framework pinning with zero `using="..."` configuration boilerplate.
+2. **Default Two-Way Value Binding (`BindingMode.twoWay`):**
+   - `value.bind` automatically synchronizes bidirectional updates between Aurelia and foreign components without manual `on-change.bind`.
+3. **Automatic Framework Detection Engine (`detectFramework`):**
+   - Automatically detects Vue 3, Svelte 5, Lit, Qwik, and React components from signatures, metadata, and prototypes.
+4. **Single Unified `component.bind` API:**
+   - Unifies eager classes, promises, and dynamic `() => import(...)` loaders under one intuitive bindable.
+5. **HTMX Swapped Fragment Enhancement (`htmx:afterSwap`):**
+   - Automatically invokes Aurelia compilation and enhancement on newly injected hypermedia fragments.
+6. **Smart Selective Vite Optimization:**
+   - Inspects project dependencies to only optimize installed foreign frameworks without missing package errors.
+7. **`packages/aurelia-bridge/example` Canonical Showcase:**
    - Dedicated polyglot example running React 19, Vue 3, Svelte 5, SolidJS, Preact, Qwik, and HTMX 2.0 in a clean, enterprise-grade application structure.
-   - 100% English documentation with reproducible instructions.
-3. **Upstream Alignment:**
-   - This architectural study serves as the reference blueprint for teams migrating from manual glue code to the Aurelia 2 bridge ecosystem.
 
 ---
 
