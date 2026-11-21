@@ -116,7 +116,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     const AppShell = CustomElement.define(
       {
         name: 'bridge-test-shell',
-        template: `<au-bridge using="react" loader.bind="loadChart" props.bind="chartProps" on-event.bind="handleEvent"></au-bridge>`,
+        template: `<au-bridge using="react" component.bind="loadChart" props.bind="chartProps" on-event.bind="handleEvent"></au-bridge>`,
       },
       class {
         loadChart = lazyLoaderSpy;
@@ -196,14 +196,11 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     const AppShell = CustomElement.define(
       {
         name: 'ergonomic-test-shell',
-        template: `<au-bridge using="vue" component.bind="VueCounter" value.bind="count" on-change.bind="syncCount"></au-bridge>`,
+        template: `<au-bridge using="vue" component.bind="VueCounter" value.bind="count"></au-bridge>`,
       },
       class {
         VueCounter = { name: 'VueCounter' };
         count = 42;
-        syncCount = (next: number) => {
-          this.count = next;
-        };
       }
     );
 
@@ -221,7 +218,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     await new Promise((r) => setTimeout(r, 10));
     expect(host.querySelector('.val')?.textContent).toBe('43');
 
-    // Foreign component triggers onChange -> Aurelia ViewModel updates
+    // Foreign component triggers onChange -> Aurelia ViewModel two-way updates automatically
     triggerChange?.(100);
     expect(vm.count).toBe(100);
 
@@ -230,7 +227,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     dom.window.close();
   });
 
-  it('supports <aurelia-island> convention alias with type="react" and on-change.bind', async () => {
+  it('supports dedicated <au-react> convention element and two-way value binding without manual on-change.bind', async () => {
     const { dom, app, host } = createScopedAurelia();
 
     let triggerChange: ((next: unknown) => void) | undefined;
@@ -239,7 +236,7 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
       mount(ctx) {
         triggerChange = (next: unknown) => ctx.onEvent?.('change', next);
         const span = dom.window.document.createElement('span');
-        span.className = 'island-val';
+        span.className = 'react-val';
         span.textContent = String(ctx.props.value ?? '');
         ctx.container.appendChild(span);
         return {
@@ -253,42 +250,37 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
       },
     });
 
-    const IslandShell = CustomElement.define(
+    const DedicatedShell = CustomElement.define(
       {
-        name: 'island-shell',
+        name: 'dedicated-shell',
         template: `
-          <aurelia-island
-            type="react"
+          <au-react
             component.bind="ReactCounter"
-            value.bind="sharedCounter"
-            on-change.bind="syncCounter">
-          </aurelia-island>
+            value.bind="sharedCounter">
+          </au-react>
         `,
       },
       class {
         ReactCounter = { name: 'ReactCounter' };
         sharedCounter = 10;
-        syncCounter = (next: number) => {
-          this.sharedCounter = next;
-        };
       }
     );
 
     app.register(
       BridgeConfiguration.customize({ registerBuiltins: false, adapters: [mockAdapter] })
     );
-    const vm = app.container.get(IslandShell);
+    const vm = app.container.get(DedicatedShell);
     await app.app({ host, component: vm }).start();
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(host.querySelector('.island-val')?.textContent).toBe('10');
+    expect(host.querySelector('.react-val')?.textContent).toBe('10');
 
-    // Aurelia -> Island update
+    // Aurelia -> React update
     vm.sharedCounter = 25;
     await new Promise((r) => setTimeout(r, 10));
-    expect(host.querySelector('.island-val')?.textContent).toBe('25');
+    expect(host.querySelector('.react-val')?.textContent).toBe('25');
 
-    // Island -> Aurelia update
+    // React -> Aurelia two-way update
     triggerChange?.(99);
     expect(vm.sharedCounter).toBe(99);
 

@@ -223,14 +223,15 @@ export function createSolidAdapter(
         {
           get(target, prop) {
             if (prop === 'onEvent') return context.onEvent;
-            if (prop === 'onChange' && context.onEvent) {
-              return (val: unknown) => context.onEvent?.('change', val);
-            }
-            if (prop === 'onUpdate' && context.onEvent) {
-              return (event: string, payload?: unknown) => context.onEvent?.(event, payload);
-            }
-            if (prop === 'onCounterChange' && context.onEvent) {
-              return (val: unknown) => context.onEvent?.('change', val);
+            if (typeof prop === 'string' && prop.startsWith('on') && context.onEvent) {
+              if (prop === 'onChange') {
+                return (val: unknown) => context.onEvent?.('change', val);
+              }
+              if (prop === 'onUpdate') {
+                return (event: string, payload?: unknown) => context.onEvent?.(event, payload);
+              }
+              const eventName = prop.slice(2).replace(/^[A-Z]/, (c) => c.toLowerCase());
+              return (payload: unknown) => context.onEvent?.(eventName, payload);
             }
             const current = getProps();
             if (typeof prop === 'string' && prop in current) {
@@ -401,8 +402,6 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           out.onEvent$ = onEventQrl;
           out.onChange = onChangeQrl;
           out.onChange$ = onChangeQrl;
-          out.onCounterChange = onChangeQrl;
-          out.onCounterChange$ = onChangeQrl;
           out.onUpdate = onUpdateQrl;
           out.onUpdate$ = onUpdateQrl;
         }

@@ -3,30 +3,31 @@
  *
  * Idiomatic Aurelia Custom Attribute for enhancing existing DOM elements with HTMX
  * hypermedia attributes (`hx-get`, `hx-post`, `hx-swap`, `hx-trigger`) without adding
- * extra wrapper nodes or forcing hypermedia into JS props contracts.
+ * extra wrapper nodes.
  *
- * ```html
- * <section au-htmx hx-get="/partials/stats" hx-trigger="load"></section>
- * ```
+ * Automatically enhances Aurelia custom elements inside swapped hypermedia fragments.
  */
 
-import { INode, IPlatform, optional, resolve } from 'aurelia';
+import { Aurelia, IContainer, INode, IPlatform, optional, resolve } from 'aurelia';
 import { IHtmx, type HtmxLike } from './types.js';
 
 export class AuHtmx {
   public static readonly $au = {
-    type: 'custom-attribute',
+    type: 'custom-attribute' as const,
     name: 'au-htmx',
-    bindables: ['value'],
+    bindables: ['value', 'enhance'],
     defaultProperty: 'value',
-  } as const;
+  };
 
   public value?: HtmxLike | boolean;
+  public enhance = true;
 
-  private readonly element = resolve(INode) as Element;
+  private readonly element = resolve(INode) as HTMLElement;
   private readonly platform = resolve(IPlatform);
+  private readonly container = resolve(IContainer);
   private readonly injectedHtmx = resolve(optional(IHtmx));
   private isAttached = false;
+  private swapListener?: (evt: Event) => void;
 
   async attached(): Promise<void> {
     this.isAttached = true;
@@ -48,10 +49,29 @@ export class AuHtmx {
     }
 
     htmx.process(this.element);
+
+    if (this.enhance) {
+      this.swapListener = (evt: Event) => {
+        const target = (evt as unknown as { detail?: { target?: HTMLElement } }).detail?.target ?? this.element;
+        if (target && typeof target.querySelectorAll === 'function') {
+          try {
+            const au = new Aurelia(this.container);
+            void au.enhance({ host: target, component: {} });
+          } catch {
+            // Ignore if no aurelia custom elements present
+          }
+        }
+      };
+      this.element.addEventListener('htmx:afterSwap', this.swapListener);
+    }
   }
 
   detaching(): void {
     this.isAttached = false;
+    if (this.swapListener) {
+      this.element.removeEventListener('htmx:afterSwap', this.swapListener);
+      this.swapListener = undefined;
+    }
   }
 
   private async resolveHtmx(): Promise<HtmxLike | null> {

@@ -37,9 +37,38 @@ export interface BridgeViteOptions {
 export interface MinimalVitePlugin {
   name: string;
   enforce?: 'pre' | 'post';
-  config?: () => Record<string, unknown>;
+  config?: (userConfig?: { root?: string }) => Record<string, unknown>;
   transform?: (code: string, id: string) => Promise<{ code: string; map?: unknown } | null>;
   configureServer?: (server: { middlewares: { use: (route: string, handler: (req: unknown, res: any) => void) => void } }) => void;
+}
+
+function detectDeclaredDependencies(root = process.cwd()): string[] {
+  try {
+    const fs = typeof process !== 'undefined' ? (process as any).getBuiltinModule?.('node:fs') ?? null : null;
+    const path = typeof process !== 'undefined' ? (process as any).getBuiltinModule?.('node:path') ?? null : null;
+    const pkgJsonPath = path ? path.resolve(root, 'package.json') : 'package.json';
+    if (fs && fs.existsSync(pkgJsonPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      const declared = new Set([
+        ...Object.keys(pkg.dependencies ?? {}),
+        ...Object.keys(pkg.devDependencies ?? {}),
+      ]);
+      const includes: string[] = ['aurelia'];
+      if (declared.has('react')) includes.push('react', 'react-dom/client');
+      if (declared.has('vue')) includes.push('vue');
+      if (declared.has('svelte')) includes.push('svelte');
+      if (declared.has('solid-js')) includes.push('solid-js', 'solid-js/web');
+      if (declared.has('preact')) includes.push('preact', 'preact/hooks');
+      if (declared.has('@builder.io/qwik')) {
+        includes.push('@builder.io/qwik', '@builder.io/qwik/loader', '@builder.io/qwik/qwikloader.js');
+      }
+      if (declared.has('htmx.org')) includes.push('htmx.org');
+      return includes;
+    }
+  } catch {
+    // Fallback if filesystem read is not available
+  }
+  return ['aurelia'];
 }
 
 /**
@@ -57,7 +86,8 @@ export function bridge(options: BridgeViteOptions = {}): MinimalVitePlugin {
   return {
     name: 'aureliajs-bridge',
     enforce: 'pre',
-    config() {
+    config(userConfig) {
+      const root = (userConfig as { root?: string })?.root ?? process.cwd();
       return {
         define: {
           __VUE_OPTIONS_API__: JSON.stringify(true),
@@ -66,21 +96,7 @@ export function bridge(options: BridgeViteOptions = {}): MinimalVitePlugin {
           'globalThis.qRuntimeQrl': JSON.stringify(true),
         },
         optimizeDeps: {
-          include: [
-            'aurelia',
-            'react',
-            'react-dom/client',
-            'vue',
-            'svelte',
-            'solid-js',
-            'solid-js/web',
-            'preact',
-            'preact/hooks',
-            '@builder.io/qwik',
-            '@builder.io/qwik/loader',
-            '@builder.io/qwik/qwikloader.js',
-            'htmx.org',
-          ],
+          include: detectDeclaredDependencies(root),
         },
       };
     },

@@ -91,30 +91,31 @@ export class AnalyticsPage {
 ```
 
 ```html
-<!-- 1. Immediate mount inside Aurelia (Standard props) -->
-<au-bridge
-  using="react"
-  loader.bind="loadChart"
+<!-- 1. Dedicated Convention Elements (<au-react>, <au-vue>, <au-svelte>, <au-solid>, <au-preact>, <au-qwik>, <au-lit>) -->
+<au-react
+  component.bind="loadChart"
   props.bind="chartProps"
   on-event.bind="handleBridgeEvent">
-</au-bridge>
+</au-react>
 
-<!-- 2. Shorthand two-way binding for counters, forms, and inputs -->
-<au-bridge
-  using="vue"
+<!-- 2. Two-way binding by default on value.bind (zero on-change boilerplate) -->
+<au-vue
   component.bind="VueCounter"
-  value.bind="sharedCount"
-  on-change.bind="handleCountChange">
+  value.bind="sharedCount">
+</au-vue>
+
+<!-- 3. Generic <au-bridge> with Automatic Framework Detection -->
+<au-bridge
+  component.bind="SvelteWidget"
+  value.bind="sharedCount">
 </au-bridge>
 
-<!-- 3. Orthogonal composition with @aureliajs/islands for lazy viewport mounting (0 KB React until visible) -->
-<au-bridge
+<!-- 4. Orthogonal composition with @aureliajs/islands for lazy viewport mounting (0 KB React until visible) -->
+<au-react
   island="visible"
-  using="react"
-  loader.bind="loadChart"
-  props.bind="chartProps"
-  on-event.bind="handleBridgeEvent">
-</au-bridge>
+  component.bind="loadChart"
+  props.bind="chartProps">
+</au-react>
 ```
 
 ### 3. Hypermedia Regions with `au-htmx`

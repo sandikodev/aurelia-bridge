@@ -113,53 +113,47 @@
 
       <!-- Multi-Framework Polyglot Bridge Grid -->
       <div class="polyglot-grid" ref="polyglotGridRef">
-        <!-- 1. React 19 via <au-bridge> -->
-        <au-bridge 
-          using="react" 
+        <!-- 1. React 19 via <au-react> -->
+        <au-react 
           component.bind="ReactCounter" 
           value.bind="sharedCounter" 
           on-change.bind="(v) => handleCounterUpdate(v, 'React 19')">
-        </au-bridge>
+        </au-react>
 
-        <!-- 2. Vue 3 SFC via <au-bridge> -->
-        <au-bridge 
-          using="vue" 
+        <!-- 2. Vue 3 SFC via <au-vue> -->
+        <au-vue 
           component.bind="VueCounter" 
           value.bind="sharedCounter" 
           on-change.bind="(v) => handleCounterUpdate(v, 'Vue 3 SFC')">
-        </au-bridge>
+        </au-vue>
 
-        <!-- 3. Svelte 5 Runes via <au-bridge> -->
-        <au-bridge 
-          using="svelte" 
+        <!-- 3. Svelte 5 Runes via <au-svelte> -->
+        <au-svelte 
           component.bind="SvelteCounter" 
           value.bind="sharedCounter" 
           on-change.bind="(v) => handleCounterUpdate(v, 'Svelte 5 Runes')">
-        </au-bridge>
+        </au-svelte>
 
-        <!-- 4. SolidJS JSX via <au-bridge> -->
-        <au-bridge 
-          using="solid" 
+        <!-- 4. SolidJS JSX via <au-solid> -->
+        <au-solid 
           component.bind="SolidCounter" 
           value.bind="sharedCounter" 
           on-change.bind="(v) => handleCounterUpdate(v, 'SolidJS')">
-        </au-bridge>
+        </au-solid>
 
-        <!-- 5. Preact via <au-bridge> -->
-        <au-bridge 
-          using="preact" 
+        <!-- 5. Preact via <au-preact> -->
+        <au-preact 
           component.bind="PreactCounter" 
           value.bind="sharedCounter" 
           on-change.bind="(v) => handleCounterUpdate(v, 'Preact 3kB')">
-        </au-bridge>
+        </au-preact>
 
-        <!-- 6. Qwik via <au-bridge> -->
-        <au-bridge 
-          using="qwik" 
+        <!-- 6. Qwik via <au-qwik> -->
+        <au-qwik 
           component.bind="QwikCounter" 
           value.bind="sharedCounter" 
           on-change.bind="(v) => handleCounterUpdate(v, 'Qwik Resumable')">
-        </au-bridge>
+        </au-qwik>
 
         <!-- 7. HTMX 2.0 Component (Pure Hypermedia Component) -->
         <htmx-card></htmx-card>

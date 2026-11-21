@@ -1,17 +1,16 @@
 /**
- * @aureliajs/bridge - Native Aurelia 2 `<au-bridge>` Custom Element
+ * @aureliajs/bridge - Native Aurelia 2 `<au-bridge>` & Framework Elements
  *
  * Mounts foreign UI framework component subtrees (React, Vue, Svelte, SolidJS,
- * Preact, Qwik, or custom adapters) inside Aurelia 2 with live reactive props,
- * lazy `() => import(...)` component loaders, and deterministic DI teardown.
- *
- * Composes orthogonally with `@aureliajs/islands`:
- * ```html
- * <au-bridge island="visible" using="react" component.bind="loadChart" props.bind="data"></au-bridge>
- * ```
+ * Preact, Qwik, Lit) inside Aurelia 2 with:
+ * - Two-way reactive `value.bind` by default (zero boilerplate synchronization)
+ * - Automatic framework detection from component signatures/metadata
+ * - Dedicated convention Custom Elements: <au-react>, <au-vue>, <au-svelte>, etc.
+ * - Single unified `component.bind` (supports eager classes or async loaders)
+ * - Deterministic DI teardown and monotonic race-safe mounting (mountEpoch)
  */
 
-import { INode, IPlatform, optional, resolve } from 'aurelia';
+import { BindingMode, INode, IPlatform, optional, resolve } from 'aurelia';
 import { ISSRContext } from '@aurelia/runtime-html';
 import {
   IBridgeRegistry,
@@ -31,28 +30,80 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
+/**
+ * Automatically detect the foreign framework from component metadata, prototype, or file signature.
+ */
+export function detectFramework(component: unknown): BridgeFramework {
+  if (!component) return 'react';
+
+  // 1. Lit / Web Components: subclass of HTMLElement or custom element tag
+  if (
+    (typeof component === 'function' &&
+      component.prototype &&
+      (component.prototype instanceof (globalThis.HTMLElement || Object) ||
+        typeof (component.prototype as { connectedCallback?: unknown }).connectedCallback === 'function')) ||
+    (typeof component === 'string' && component.includes('-'))
+  ) {
+    return 'lit';
+  }
+
+  // 2. Vue 3: __vccOpts, __file ending with .vue, or setup/render signature
+  const compObj = component as Record<string, unknown>;
+  if (
+    '__vccOpts' in compObj ||
+    (typeof compObj.__file === 'string' && compObj.__file.endsWith('.vue')) ||
+    ('setup' in compObj && typeof compObj.setup === 'function')
+  ) {
+    return 'vue';
+  }
+
+  // 3. Svelte 5 / Svelte 4: Svelte component markers or .svelte file
+  if (
+    '$$render' in compObj ||
+    ('render' in compObj && '$$' in compObj) ||
+    (typeof compObj.__file === 'string' && compObj.__file.endsWith('.svelte'))
+  ) {
+    return 'svelte';
+  }
+
+  // 4. Qwik: component$ QRL markers or qRuntimeQrl
+  if (
+    'qrl' in compObj ||
+    '__qwik_component__' in compObj ||
+    (typeof component === 'function' && (component as { qRuntimeQrl?: boolean }).qRuntimeQrl)
+  ) {
+    return 'qwik';
+  }
+
+  // 5. Default fallback
+  return 'react';
+}
+
 export class AuBridge {
-  public static readonly $au: {
-    readonly type: 'custom-element';
-    readonly name: string;
-    readonly template: string;
-    readonly bindables: readonly string[];
-  } = {
-    type: 'custom-element',
+  public static readonly $au = {
+    type: 'custom-element' as const,
     name: 'au-bridge',
     template: `<div ref="mountPoint" data-bridge-framework.bind="getEffectiveFramework()"></div>`,
-    bindables: ['using', 'type', 'component', 'loader', 'props', 'value', 'onChange', 'onUpdate', 'onEvent'],
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'using',
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
   };
 
-  public using: BridgeFramework = 'react';
-  public type?: BridgeFramework;
+  public using?: BridgeFramework;
   public component: BridgeComponentInput = null;
-  public loader?: () => Promise<unknown>;
   public props: Record<string, unknown> = {};
   public value?: unknown;
   public onChange?: (val: unknown) => void;
   public onEvent?: BridgeEventHandler;
   public onUpdate?: BridgeEventHandler;
+  public onError?: (err: unknown) => void;
   public mountPoint?: HTMLElement;
 
   private readonly host = resolve(INode) as HTMLElement;
@@ -63,14 +114,16 @@ export class AuBridge {
   private instance: BridgeInstance | null = null;
   private isAttached = false;
   private mountEpoch = 0;
+  private resolvedComponent: unknown = null;
 
   public getEffectiveFramework(): BridgeFramework {
-    return this.type ?? this.using ?? 'react';
+    if (this.using) return this.using;
+    return detectFramework(this.resolvedComponent ?? this.component);
   }
 
   private getEffectiveProps(): Record<string, unknown> {
     return {
-      ...(this.props),
+      ...this.props,
       ...(this.value !== undefined ? { value: this.value } : {}),
     };
   }
@@ -105,23 +158,7 @@ export class AuBridge {
     }
   }
 
-  async loaderChanged(): Promise<void> {
-    if (this.ssrContext) return;
-    if (this.isAttached) {
-      await this.remountBridge();
-    }
-  }
-
   async usingChanged(): Promise<void> {
-    if (this.isAttached) {
-      await this.remountBridge();
-    }
-  }
-
-  async typeChanged(newType: BridgeFramework): Promise<void> {
-    if (newType) {
-      this.using = newType;
-    }
     if (this.isAttached) {
       await this.remountBridge();
     }
@@ -146,15 +183,13 @@ export class AuBridge {
 
   private async mountBridge(): Promise<void> {
     const container = this.mountPoint ?? this.host;
-    if (!container || (!this.component && !this.loader)) return;
+    if (!container || !this.component) return;
 
     const epoch = ++this.mountEpoch;
 
     try {
       let rawLoaded: unknown = null;
-      if (typeof this.loader === 'function') {
-        rawLoaded = await this.loader();
-      } else if (typeof this.component === 'function' && this.component.length === 0) {
+      if (typeof this.component === 'function' && this.component.length === 0) {
         try {
           const res = (this.component as () => unknown)();
           if (isPromiseLike(res)) {
@@ -172,8 +207,7 @@ export class AuBridge {
       }
 
       let resolvedComponent: unknown = rawLoaded;
-      const fw = this.getEffectiveFramework();
-      let effectiveAdapter = this.registry.get(fw);
+      let effectiveAdapter: BridgeAdapter | undefined;
 
       if (rawLoaded && typeof rawLoaded === 'object') {
         const asObj = rawLoaded as Record<string, unknown>;
@@ -182,6 +216,10 @@ export class AuBridge {
         }
         resolvedComponent = asObj.component ?? asObj.default ?? rawLoaded;
       }
+
+      this.resolvedComponent = resolvedComponent;
+      const fw = this.getEffectiveFramework();
+      effectiveAdapter ??= this.registry.get(fw);
 
       if (!effectiveAdapter) {
         console.warn(`[@aureliajs/bridge] No adapter registered for framework: "${fw}".`);
@@ -224,6 +262,17 @@ export class AuBridge {
 
       this.instance = mounted;
     } catch (err) {
+      this.onError?.(err);
+      const EventCtor = this.platform.CustomEvent;
+      if (EventCtor && typeof this.host.dispatchEvent === 'function') {
+        this.host.dispatchEvent(
+          new EventCtor('bridge-error', {
+            bubbles: true,
+            composed: true,
+            detail: { framework: this.getEffectiveFramework(), error: err },
+          })
+        );
+      }
       console.error(`[@aureliajs/bridge] Error mounting "${this.getEffectiveFramework()}" component:`, err);
     }
   }
@@ -237,16 +286,142 @@ export class AuBridge {
   }
 }
 
-/**
- * Universal Convention Island (<aurelia-island>)
- * Backward-compatible alias for <au-bridge> allowing:
- * <aurelia-island type="react" component.bind="ReactCounter" value.bind="count" on-change.bind="sync">
- */
-export class AureliaIsland extends AuBridge {
+/** Dedicated Convention Custom Element: <au-react> */
+export class AuReact extends AuBridge {
   public static override readonly $au = {
     type: 'custom-element' as const,
-    name: 'aurelia-island',
-    template: `<div ref="mountPoint" data-bridge-framework.bind="getEffectiveFramework()"></div>`,
-    bindables: ['type', 'using', 'component', 'loader', 'props', 'value', 'onChange', 'onUpdate', 'onEvent'] as const,
+    name: 'au-react',
+    template: `<div ref="mountPoint" data-bridge-framework="react"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
   };
+
+  public override using: BridgeFramework = 'react';
+}
+
+/** Dedicated Convention Custom Element: <au-vue> */
+export class AuVue extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-vue',
+    template: `<div ref="mountPoint" data-bridge-framework="vue"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
+  };
+
+  public override using: BridgeFramework = 'vue';
+}
+
+/** Dedicated Convention Custom Element: <au-svelte> */
+export class AuSvelte extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-svelte',
+    template: `<div ref="mountPoint" data-bridge-framework="svelte"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
+  };
+
+  public override using: BridgeFramework = 'svelte';
+}
+
+/** Dedicated Convention Custom Element: <au-solid> */
+export class AuSolid extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-solid',
+    template: `<div ref="mountPoint" data-bridge-framework="solid"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
+  };
+
+  public override using: BridgeFramework = 'solid';
+}
+
+/** Dedicated Convention Custom Element: <au-preact> */
+export class AuPreact extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-preact',
+    template: `<div ref="mountPoint" data-bridge-framework="preact"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
+  };
+
+  public override using: BridgeFramework = 'preact';
+}
+
+/** Dedicated Convention Custom Element: <au-qwik> */
+export class AuQwik extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-qwik',
+    template: `<div ref="mountPoint" data-bridge-framework="qwik"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
+  };
+
+  public override using: BridgeFramework = 'qwik';
+}
+
+/** Dedicated Convention Custom Element: <au-lit> */
+export class AuLit extends AuBridge {
+  public static override readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-lit',
+    template: `<div ref="mountPoint" data-bridge-framework="lit"></div>`,
+    bindables: [
+      { name: 'value', mode: BindingMode.twoWay },
+      'component',
+      'props',
+      'onChange',
+      'onUpdate',
+      'onEvent',
+      'onError',
+    ],
+  };
+
+  public override using: BridgeFramework = 'lit';
 }
