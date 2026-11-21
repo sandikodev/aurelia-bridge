@@ -63,8 +63,17 @@ In this showcase, **all manual glue code is 100% eliminated** using dedicated co
   on-change.bind="(v) => handleCounterUpdate(v, 'Qwik Resumable')">
 </au-qwik>
 
-<!-- 7. Pure Hypermedia Component via au-htmx -->
-<htmx-card></htmx-card>
+<!-- 7. Pure Hypermedia Region via au-htmx -->
+<div class="card htmx-card" au-htmx>
+  <button 
+    class="btn-framework btn-htmx" 
+    hx-get="/api/htmx-demo" 
+    hx-target="#htmx-card-response" 
+    hx-swap="innerHTML">
+    ⚡ Fetch Server Fragment (hx-get)
+  </button>
+  <div id="htmx-card-response" class="htmx-card-response"></div>
+</div>
 ```
 
 ---
@@ -162,7 +171,7 @@ export class MyApp {
 ## 3. Directory Structure
 
 ```
-examples/aurelia-bridge/
+example/
 ├── index.html                           # Host HTML shell with inline SVG favicon
 ├── package.json                         # Project dependencies and build scripts
 ├── tsconfig.json                        # Strict TypeScript compiler options
@@ -187,7 +196,8 @@ examples/aurelia-bridge/
             ├── counter.solid.tsx        # SolidJS JSX component
             ├── counter.preact.tsx       # Preact lightweight component
             ├── counter.qwik.tsx         # Qwik resumable component
-            └── htmx.html                # Pure HTMX hypermedia component
+            ├── htmx.html                # Pure HTMX hypermedia component
+            └── htmx.ts                  # HTMX Custom Element wrapper
 ```
 
 ---
@@ -198,41 +208,29 @@ examples/aurelia-bridge/
 - [Bun](https://bun.sh) (v1.2+ recommended) or Node.js (v20+)
 
 ### Step 1: Install Dependencies
-Run from the repository root:
+Run inside `packages/aurelia-bridge/example` (or install via the root workspace):
 ```bash
 bun install
 ```
 
-### Step 2: Build All Monorepo Core Packages
-Ensure all workspaces are compiled and up to date:
+### Step 2: Run Tests
+Execute the comprehensive test suite for this example:
 ```bash
-bun run build
+bun test
 ```
 
-### Step 3: Run Type Checking
-Verify strict TypeScript compilation across all workspaces:
-```bash
-bun run typecheck
-```
-
-### Step 4: Run the Complete Test Suite
-Verify that all 158 monorepo unit and integration tests pass:
-```bash
-bun test && bun test packages/hono-aurelia
-```
-
-### Step 5: Start the Polyglot Development Server
+### Step 3: Start the Polyglot Development Server
 Launch the Vite development server:
 ```bash
-bun run --cwd examples/aurelia-bridge dev
+bun run dev
 ```
 
 Open `http://localhost:5173` in your browser.
 
-### Step 6: Verify Production Build
+### Step 4: Verify Production Build
 Build the production bundle and verify zero bundling errors:
 ```bash
-bun run --cwd examples/aurelia-bridge build
+bun run build
 ```
 
 ---

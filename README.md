@@ -7,8 +7,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Community Note:** `@aureliajs/bridge` is an independent open-source package by **Sandikodev ([@sandikodev](https://github.com/sandikodev))**. Real enterprise teams rarely rewrite an entire application overnight — they embed an existing React chart, a Vue design system widget, a Svelte 5 interactive control, or HTMX hypermedia regions inside Aurelia 2. `@aureliajs/bridge` makes that interop strictly typed, lazy, race-safe, DI-native, and follows **Convention over Configuration**.
->
-> 📖 **Architectural Study & Guiding Principles:** Read [ARCHITECTURAL-STUDY.md](./ARCHITECTURAL-STUDY.md) for an in-depth comparative analysis between the manual wrappers from docs.aurelia.io, ergonomic community implementations, and our resilient blueprint for foreign framework interop.
 
 ---
 
@@ -26,8 +24,9 @@
 - **7 Built-in Lazy Adapters**: React 18/19, Vue 3, Svelte 5, SolidJS, Preact, Qwik, and Lit / W3C Custom Elements, plus `defineBridgeAdapter()` for any custom runtime (Three.js, D3, Monaco, MapLibre).
 - **Smart Vite Plugin (`@aureliajs/bridge/vite`)**: On-the-fly compilation for Vue SFCs, Svelte 5 Runes, SolidJS JSX, and automatic dependency pre-bundling tailored strictly to installed packages.
 
-### What `@aureliajs/bridge` Explicitly DOES NOT OWN (**WHEN / HOW** components hydrate)
-- `IntersectionObserver`, `requestIdleCallback`, `matchMedia`, or Zero-JS SSR island loading. Those concerns are strictly decoupled and belong to [`@aureliajs/islands`](../aurelia-islands/README.md). When both packages are installed, Aurelia's native template controller architecture allows `island="visible"` to wrap any bridge element cleanly without mutual dependencies.
+### What `@aureliajs/bridge` Explicitly DOES NOT OWN
+- Zero-JS partial hydration scheduling (`IntersectionObserver`, `requestIdleCallback`), or server routing. `@aureliajs/bridge` remains an unopinionated client mounting and interop engine for foreign frameworks and hypermedia.
+- Forcing foreign dependencies: all foreign packages (`react`, `vue`, `svelte`, `solid-js`, `preact`, `qwik`, `lit`, `htmx.org`) are optional peer dependencies.
 
 ---
 
@@ -226,45 +225,6 @@ If you prefer a single universal tag, `<au-bridge>` automatically detects the ta
 <au-bridge using="react" component.bind="ReactChart" props.bind="chartData"></au-bridge>
 ```
 
-#### Option C: Pairing with `@aureliajs/islands` (Selective Hydration)
-
-`@aureliajs/bridge` is **100% standalone**. However, if you also install [`@aureliajs/islands`](../aurelia-islands/README.md), Aurelia 2's native template controller architecture enables you to defer downloading and mounting any foreign framework until a trigger fires:
-
-```ts
-import Aurelia from 'aurelia';
-import { BridgeConfiguration } from '@aureliajs/bridge';
-import { IslandsConfiguration } from '@aureliajs/islands';
-
-// Register both plugins in your application entrypoint:
-Aurelia.register(BridgeConfiguration, IslandsConfiguration).app(App).start();
-```
-
-Now you can attach `island="..."` to any bridge element:
-
-```html
-<!-- 0 KB React downloaded and 0 VDOM overhead until the chart scrolls into view! -->
-<au-react
-  island="visible"
-  component.bind="loadChart"
-  props.bind="chartData">
-</au-react>
-
-<!-- Defers mounting Svelte until browser main thread is idle -->
-<au-svelte
-  island="idle"
-  component.bind="SvelteWidget"
-  value.bind="sharedCount">
-</au-svelte>
-
-<!-- Mounts only on mobile screen widths -->
-<au-vue
-  island="media: (max-width: 768px)"
-  component.bind="MobileNav">
-</au-vue>
-```
-
-> **How it works under the hood:** In Aurelia 2, `island` is an `isTemplateController: true` attribute. When present, it wraps the bridge element in a Synthetic View, pausing DOM attachment until the trigger (e.g. `IntersectionObserver`) activates. When activated, `<au-react>` attaches, resolves its dynamic chunk, and mounts React. **Neither package requires a hard dependency on the other!**
-
 ---
 
 ### 3. Hypermedia Integration with HTMX 2.0 (`au-htmx` & `<au-htmx>`)
@@ -382,7 +342,7 @@ We openly document each adapter's runtime mechanics ([src/adapters/index.ts](./s
 | Subpath | Runtime Dependencies | Key Exports |
 | :--- | :--- | :--- |
 | **`@aureliajs/bridge`** | `aurelia` | `BridgeConfiguration`, `AuBridge`, `<au-react>` (`AuReact`), `<au-vue>` (`AuVue`), `<au-svelte>` (`AuSvelte`), `<au-solid>` (`AuSolid`), `<au-preact>` (`AuPreact`), `<au-qwik>` (`AuQwik`), `<au-lit>` (`AuLit`), `AuHtmx`, `detectFramework`, `IBridgeRegistry`, `IHtmx`, `BridgeRegistry`, `createDefaultBridgeRegistry`, `defineBridgeAdapter`, all 7 `create*Adapter()` factories, generic types |
-| **`@aureliajs/bridge/adapters`** | **None (0 KB Aurelia)** | `BridgeRegistry`, `createDefaultBridgeRegistry`, `createReactAdapter`, `createVueAdapter`, `createSvelteAdapter`, `createSolidAdapter`, `createPreactAdapter`, `createQwikAdapter`, `createLitAdapter` (usable independently with `@aureliajs/islands/loader` on Zero-JS pages) |
+| **`@aureliajs/bridge/adapters`** | **None (0 KB Aurelia)** | `BridgeRegistry`, `createDefaultBridgeRegistry`, `createReactAdapter`, `createVueAdapter`, `createSvelteAdapter`, `createSolidAdapter`, `createPreactAdapter`, `createQwikAdapter`, `createLitAdapter` (usable independently in headless environments, micro-frontends, or custom vanilla runtimes without Aurelia) |
 | **`@aureliajs/bridge/vite`** | `vite` | `bridge()`, `bridgePlugin` (Smart Vite plugin providing on-the-fly compilation for Vue SFCs, Svelte 5 runes, SolidJS JSX, HTMX dev mock endpoints, and selective pre-bundling) |
 
 ---

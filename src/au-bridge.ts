@@ -135,17 +135,6 @@ export class AuBridge {
       return;
     }
 
-    // Diagnostic hint: If developer specified island="..." but @aureliajs/islands is not registered,
-    // Aurelia's compiler treats it as a standard HTML attribute instead of a Template Controller.
-    if (this.host.hasAttribute('island')) {
-      const trigger = this.host.getAttribute('island');
-      if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
-        console.info(
-          `[@aureliajs/bridge] Note: Element <${this.host.tagName.toLowerCase()}> has island="${trigger}", but @aureliajs/islands is not registered in this DI container. Register IslandsConfiguration from '@aureliajs/islands' to enable selective hydration scheduling.`
-        );
-      }
-    }
-
     await this.mountBridge();
   }
 
