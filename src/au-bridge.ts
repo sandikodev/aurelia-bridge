@@ -19,8 +19,8 @@ import {
   type BridgeEventHandler,
   type BridgeFramework,
   type BridgeInstance,
-} from './types.js';
-import { createDefaultBridgeRegistry } from './adapters/index.js';
+} from './types';
+import { createDefaultBridgeRegistry } from './adapters';
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return (

@@ -18,7 +18,7 @@ import {
   createVueAdapter,
   defineBridgeAdapter,
   type HtmxLike,
-} from '../src/index.js';
+} from '../src/index';
 
 function createScopedAurelia() {
   const dom = new JSDOM('<!DOCTYPE html><html><body><div id="host"></div></body></html>', {

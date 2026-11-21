@@ -12,10 +12,10 @@ import {
   AuSolid,
   AuSvelte,
   AuVue,
-} from './au-bridge.js';
-import { AuHtmx, AuHtmxElement } from './au-htmx.js';
-import { IBridgeRegistry, IHtmx, type BridgePluginOptions } from './types.js';
-import { BridgeRegistry, createDefaultBridgeRegistry } from './adapters/index.js';
+} from './au-bridge';
+import { AuHtmx, AuHtmxElement } from './au-htmx';
+import { IBridgeRegistry, IHtmx, type BridgePluginOptions } from './types';
+import { BridgeRegistry, createDefaultBridgeRegistry } from './adapters';
 
 const BRIDGE_ELEMENTS = [
   AuBridge,

@@ -103,6 +103,7 @@ describe('examples/aurelia-bridge integration tests', () => {
 
     try {
       const qwik = await import('@builder.io/qwik');
+      const qwikLoader = await import('@builder.io/qwik/loader');
       const { component$, useSignal, $, jsx } = qwik;
       const { createQwikAdapter } = await import('@aureliajs/bridge');
 
@@ -130,7 +131,7 @@ describe('examples/aurelia-bridge integration tests', () => {
         });
       });
 
-      const adapter = createQwikAdapter(qwik as any);
+      const adapter = createQwikAdapter(qwik as any, qwikLoader as any);
       const instance = await adapter.mount({
         container,
         component: TestQwikCounter,

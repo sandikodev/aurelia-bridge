@@ -12,7 +12,7 @@ import type {
   BridgeInstance,
   BridgeMountContext,
   IBridgeRegistry,
-} from '../types.js';
+} from '../types';
 
 export class BridgeRegistry implements IBridgeRegistry {
   private readonly adapters = new Map<string, BridgeAdapter>();
@@ -328,7 +328,10 @@ interface QwikLike {
 /**
  * Qwik Bridge Adapter
  */
-export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
+export function createQwikAdapter(
+  qwikModule?: QwikLike,
+  loaderModule?: { QWIK_LOADER?: string }
+): BridgeAdapter {
   return {
     framework: 'qwik',
     async mount(context: BridgeMountContext): Promise<BridgeInstance> {
@@ -352,20 +355,27 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           if (!win.qwikevents) {
             win.qwikevents = ['click', 'input', 'change', 'keydown', 'keyup'];
           }
-          const { QWIK_LOADER } = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER: string };
-          if (QWIK_LOADER) {
-            new Function('document', 'window', 'CustomEvent', QWIK_LOADER)(
+          let qwikLoaderCode: string | undefined =
+            loaderModule?.QWIK_LOADER ?? (qwik as unknown as { QWIK_LOADER?: string })?.QWIK_LOADER;
+          if (!qwikLoaderCode) {
+            try {
+              const loaded = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER?: string };
+              qwikLoaderCode = loaded.QWIK_LOADER;
+            } catch {
+              // fallback
+            }
+          }
+          if (qwikLoaderCode) {
+            new Function('document', 'window', 'CustomEvent', qwikLoaderCode)(
               doc,
               win,
               win.CustomEvent ?? (typeof CustomEvent !== 'undefined' ? CustomEvent : null)
             );
+          } else {
+            await import('@builder.io/qwik/qwikloader.js');
           }
         } catch {
-          try {
-            await import('@builder.io/qwik/qwikloader.js');
-          } catch {
-            // loader not available or simulated mock environment
-          }
+          // loader not available or simulated mock environment
         }
       }
 

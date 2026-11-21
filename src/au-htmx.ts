@@ -9,7 +9,7 @@
  */
 
 import { Aurelia, IContainer, INode, IPlatform, optional, resolve } from 'aurelia';
-import { IHtmx, type HtmxLike } from './types.js';
+import { IHtmx, type HtmxLike } from './types';
 
 export async function resolveHtmxRuntime(
   value: unknown,
