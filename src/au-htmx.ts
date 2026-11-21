@@ -1,16 +1,47 @@
 /**
- * @aureliajs/bridge - Native Aurelia 2 `au-htmx` Custom Attribute
+ * @aureliajs/bridge - Native Aurelia 2 HTMX Hypermedia Integration
  *
- * Idiomatic Aurelia Custom Attribute for enhancing existing DOM elements with HTMX
- * hypermedia attributes (`hx-get`, `hx-post`, `hx-swap`, `hx-trigger`) without adding
- * extra wrapper nodes.
+ * Provides two clean, idiomatic integration styles for HTMX in Aurelia 2:
+ * 1. `au-htmx` Custom Attribute: Enhances any native HTML element (<section au-htmx hx-get="/api">).
+ * 2. `<au-htmx>` Custom Element: Declarative container for hypermedia regions.
  *
- * Automatically enhances Aurelia custom elements inside swapped hypermedia fragments.
+ * Both automatically enhance newly swapped HTML fragments with Aurelia's DI container!
  */
 
 import { Aurelia, IContainer, INode, IPlatform, optional, resolve } from 'aurelia';
 import { IHtmx, type HtmxLike } from './types.js';
 
+export async function resolveHtmxRuntime(
+  value: unknown,
+  injected: HtmxLike | null | undefined,
+  platform: IPlatform
+): Promise<HtmxLike | null> {
+  if (value && typeof value === 'object' && typeof (value as HtmxLike).process === 'function') {
+    return value as HtmxLike;
+  }
+  if (injected) {
+    return injected;
+  }
+  const winHtmx = (platform.window as unknown as { htmx?: HtmxLike })?.htmx;
+  if (winHtmx && typeof winHtmx.process === 'function') {
+    return winHtmx;
+  }
+  try {
+    const mod = (await import('htmx.org')) as { default?: HtmxLike } & Partial<HtmxLike>;
+    const resolved = mod.default ?? mod;
+    if (resolved && typeof resolved.process === 'function') {
+      return resolved as HtmxLike;
+    }
+  } catch {
+    // Optional peer dependency
+  }
+  return null;
+}
+
+/**
+ * Idiomatic Custom Attribute for enhancing existing DOM elements with HTMX.
+ * Usage: <section au-htmx hx-get="/api/feed" hx-trigger="revealed"></section>
+ */
 export class AuHtmx {
   public static readonly $au = {
     type: 'custom-attribute' as const,
@@ -33,7 +64,7 @@ export class AuHtmx {
     this.isAttached = true;
     if (this.value === false) return;
 
-    const htmx = await this.resolveHtmx();
+    const htmx = await resolveHtmxRuntime(this.value, this.injectedHtmx, this.platform);
     if (!this.isAttached) return;
 
     if (!htmx) {
@@ -43,7 +74,6 @@ export class AuHtmx {
       return;
     }
 
-    // Default CSP safety: disable eval in HTMX expressions unless explicitly overridden by host app
     if (htmx.config && typeof htmx.config === 'object' && htmx.config.allowEval === undefined) {
       htmx.config.allowEval = false;
     }
@@ -73,31 +103,80 @@ export class AuHtmx {
       this.swapListener = undefined;
     }
   }
+}
 
-  private async resolveHtmx(): Promise<HtmxLike | null> {
-    if (this.value && typeof this.value === 'object' && typeof this.value.process === 'function') {
-      return this.value;
+/**
+ * Declarative Custom Element for hypermedia regions.
+ * Usage:
+ * <au-htmx from="/api/stats" trigger="load" swap="innerHTML"></au-htmx>
+ * or:
+ * <au-htmx>
+ *   <button hx-get="/api/feed" hx-target="#feed">Load</button>
+ *   <div id="feed"></div>
+ * </au-htmx>
+ */
+export class AuHtmxElement {
+  public static readonly $au = {
+    type: 'custom-element' as const,
+    name: 'au-htmx',
+    template: `<div ref="container" class="au-htmx-container"><slot></slot></div>`,
+    bindables: ['from', 'trigger', 'swap', 'target', 'enhance'],
+  };
+
+  public from?: string;
+  public trigger?: string;
+  public swap?: string;
+  public target?: string;
+  public enhance = true;
+
+  public container!: HTMLElement;
+  private readonly platform = resolve(IPlatform);
+  private readonly appContainer = resolve(IContainer);
+  private readonly injectedHtmx = resolve(optional(IHtmx));
+  private isAttached = false;
+  private swapListener?: (evt: Event) => void;
+
+  async attached(): Promise<void> {
+    this.isAttached = true;
+    const targetEl = this.container;
+
+    if (this.from) {
+      targetEl.setAttribute('hx-get', this.from);
+      if (this.trigger) targetEl.setAttribute('hx-trigger', this.trigger);
+      if (this.swap) targetEl.setAttribute('hx-swap', this.swap);
+      if (this.target) targetEl.setAttribute('hx-target', this.target);
     }
 
-    if (this.injectedHtmx) {
-      return this.injectedHtmx;
+    const htmx = await resolveHtmxRuntime(null, this.injectedHtmx, this.platform);
+    if (!this.isAttached || !htmx) return;
+
+    if (htmx.config && typeof htmx.config === 'object' && htmx.config.allowEval === undefined) {
+      htmx.config.allowEval = false;
     }
 
-    const winHtmx = (this.platform.window as unknown as { htmx?: HtmxLike })?.htmx;
-    if (winHtmx && typeof winHtmx.process === 'function') {
-      return winHtmx;
-    }
+    htmx.process(targetEl);
 
-    try {
-      const mod = (await import('htmx.org')) as { default?: HtmxLike } & Partial<HtmxLike>;
-      const resolved = mod.default ?? mod;
-      if (resolved && typeof resolved.process === 'function') {
-        return resolved as HtmxLike;
-      }
-    } catch {
-      // Optional peer dependency not installed
+    if (this.enhance) {
+      this.swapListener = (evt: Event) => {
+        const swapped = (evt as unknown as { detail?: { target?: HTMLElement } }).detail?.target ?? targetEl;
+        if (swapped && typeof swapped.querySelectorAll === 'function') {
+          try {
+            const au = new Aurelia(this.appContainer);
+            void au.enhance({ host: swapped, component: {} });
+          } catch {
+            // Ignore if no aurelia custom elements present
+          }
+        }
+      };
+      targetEl.addEventListener('htmx:afterSwap', this.swapListener);
     }
+  }
 
-    return null;
+  detaching(): void {
+    this.isAttached = false;
+    if (this.swapListener && this.container) {
+      this.container.removeEventListener('htmx:afterSwap', this.swapListener);
+      this.swapListener = undefined;
+    }
   }
 }

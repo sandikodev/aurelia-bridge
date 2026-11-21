@@ -13,7 +13,7 @@ import {
   AuSvelte,
   AuVue,
 } from './au-bridge.js';
-import { AuHtmx } from './au-htmx.js';
+import { AuHtmx, AuHtmxElement } from './au-htmx.js';
 import { IBridgeRegistry, IHtmx, type BridgePluginOptions } from './types.js';
 import { BridgeRegistry, createDefaultBridgeRegistry } from './adapters/index.js';
 
@@ -27,6 +27,7 @@ const BRIDGE_ELEMENTS = [
   AuQwik,
   AuLit,
   AuHtmx,
+  AuHtmxElement,
 ];
 
 function createRegistryFromOptions(options: BridgePluginOptions): BridgeRegistry {

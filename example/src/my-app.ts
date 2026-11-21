@@ -27,9 +27,6 @@ import { PreactCounter } from './components/frontend/counter.preact';
 // 6. Qwik Resumable Component (Serializable QRL boundaries & useSignal)
 import { QwikCounter } from './components/frontend/counter.qwik';
 
-// 7. HTMX 2.0 Pure Hypermedia Component (Zero Client JS, DOM Fragment Swapping)
-import { HtmxCard } from './components/frontend/htmx';
-
 export interface AuditLogEntry {
   id: string;
   source: string;
@@ -65,7 +62,6 @@ export interface AuditLogEntry {
   dependencies: [
     OrderItemCard,
     FormatNumberValueConverter,
-    HtmxCard,
   ],
 })
 export class MyApp {

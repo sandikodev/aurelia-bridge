@@ -18,13 +18,16 @@
 - **Dedicated Convention Custom Elements**: `<au-react>`, `<au-vue>`, `<au-svelte>`, `<au-solid>`, `<au-preact>`, `<au-qwik>`, `<au-lit>` — zero-configuration wrappers with built-in framework pinning.
 - **Universal `<au-bridge>` Custom Element**: Mounts foreign UI subtrees with **Automatic Framework Detection**, unified `component.bind` (eager classes, promises, or `() => import(...)`), reactive props forwarding, standardized `bridge-event` dispatch, and deterministic DI teardown.
 - **Default Two-Way Value Binding**: `value.bind="count"` is two-way by default (`BindingMode.twoWay`) — eliminates tedious `on-change.bind="(v) => count = v"` synchronization boilerplate.
-- **`au-htmx` Native Custom Attribute**: Enhances existing DOM elements directly with HTMX (`hx-get`, `hx-post`, `hx-swap`) — zero wrapper `<div>`s — and **automatically enhances Aurelia components in swapped fragments** via `htmx:afterSwap`.
+- **Dual-Style HTMX 2.0 Integration**:
+  - `au-htmx` **Native Custom Attribute**: Enhances existing DOM elements directly with HTMX (`hx-get`, `hx-post`, `hx-swap`) — zero wrapper `<div>`s.
+  - `<au-htmx>` **Declarative Custom Element**: Dedicated container element for declarative server-swapped hypermedia regions.
+  - **Automatic Fragment Enhancement**: Automatically compiles and activates any Aurelia components or bridge elements inside server-rendered fragments on `htmx:afterSwap`!
 - **Container-Scoped DI Services**: `IBridgeRegistry` and `IHtmx` services (never global mutable singletons!).
 - **7 Built-in Lazy Adapters**: React 18/19, Vue 3, Svelte 5, SolidJS, Preact, Qwik, and Lit / W3C Custom Elements, plus `defineBridgeAdapter()` for any custom runtime (Three.js, D3, Monaco, MapLibre).
 - **Smart Vite Plugin (`@aureliajs/bridge/vite`)**: On-the-fly compilation for Vue SFCs, Svelte 5 Runes, SolidJS JSX, and automatic dependency pre-bundling tailored strictly to installed packages.
 
 ### What `@aureliajs/bridge` Explicitly DOES NOT OWN (**WHEN / HOW** components hydrate)
-- `IntersectionObserver`, `requestIdleCallback`, `matchMedia`, or Zero-JS SSR island loading. Those concerns live in [`@aureliajs/islands`](../aurelia-islands/README.md) and compose orthogonally by adding `island="visible"` directly onto any bridge element (e.g. `<au-react island="visible">`).
+- `IntersectionObserver`, `requestIdleCallback`, `matchMedia`, or Zero-JS SSR island loading. Those concerns are strictly decoupled and belong to [`@aureliajs/islands`](../aurelia-islands/README.md). When both packages are installed, Aurelia's native template controller architecture allows `island="visible"` to wrap any bridge element cleanly without mutual dependencies.
 
 ---
 
@@ -223,24 +226,55 @@ If you prefer a single universal tag, `<au-bridge>` automatically detects the ta
 <au-bridge using="react" component.bind="ReactChart" props.bind="chartData"></au-bridge>
 ```
 
-#### Option C: Orthogonal Composition with `@aureliajs/islands`
+#### Option C: Pairing with `@aureliajs/islands` (Selective Hydration)
 
-Delay downloading and mounting foreign frameworks until visible on screen:
+`@aureliajs/bridge` is **100% standalone**. However, if you also install [`@aureliajs/islands`](../aurelia-islands/README.md), Aurelia 2's native template controller architecture enables you to defer downloading and mounting any foreign framework until a trigger fires:
+
+```ts
+import Aurelia from 'aurelia';
+import { BridgeConfiguration } from '@aureliajs/bridge';
+import { IslandsConfiguration } from '@aureliajs/islands';
+
+// Register both plugins in your application entrypoint:
+Aurelia.register(BridgeConfiguration, IslandsConfiguration).app(App).start();
+```
+
+Now you can attach `island="..."` to any bridge element:
 
 ```html
-<!-- 0 KB React downloaded until the chart enters the viewport! -->
+<!-- 0 KB React downloaded and 0 VDOM overhead until the chart scrolls into view! -->
 <au-react
   island="visible"
   component.bind="loadChart"
   props.bind="chartData">
 </au-react>
+
+<!-- Defers mounting Svelte until browser main thread is idle -->
+<au-svelte
+  island="idle"
+  component.bind="SvelteWidget"
+  value.bind="sharedCount">
+</au-svelte>
+
+<!-- Mounts only on mobile screen widths -->
+<au-vue
+  island="media: (max-width: 768px)"
+  component.bind="MobileNav">
+</au-vue>
 ```
+
+> **How it works under the hood:** In Aurelia 2, `island` is an `isTemplateController: true` attribute. When present, it wraps the bridge element in a Synthetic View, pausing DOM attachment until the trigger (e.g. `IntersectionObserver`) activates. When activated, `<au-react>` attaches, resolves its dynamic chunk, and mounts React. **Neither package requires a hard dependency on the other!**
 
 ---
 
-### 3. Hypermedia Regions with `au-htmx`
+### 3. Hypermedia Integration with HTMX 2.0 (`au-htmx` & `<au-htmx>`)
 
-Enhance any HTML5 semantic element directly without wrapper `<div>` nodes:
+HTMX is fundamentally different from client-side component engines (React, Vue, Svelte). It does not maintain virtual DOMs or local JavaScript state; instead, it streams server-rendered HTML partials over standard HTTP.
+
+`@aureliajs/bridge` provides two idiomatic ways to integrate HTMX:
+
+#### Style 1: Native Custom Attribute (`au-htmx`)
+Enhance any semantic HTML5 element directly without wrapper `<div>` nodes:
 
 ```html
 <!-- Direct Hypermedia Trigger on Semantic Elements -->
@@ -254,10 +288,20 @@ Enhance any HTML5 semantic element directly without wrapper `<div>` nodes:
     ⚡ Fetch Server Partial
   </button>
   <div id="widget-zone">
-    <!-- Any <au-react>, <au-vue>, or Aurelia component inside the fetched HTML fragment
-         is automatically compiled and enhanced by Aurelia! -->
+    <!-- Any <au-react>, <au-vue>, or native Aurelia component inside the fetched HTML fragment
+         is automatically compiled and enhanced by Aurelia upon arrival! -->
   </div>
 </div>
+```
+
+#### Style 2: Declarative Custom Element (`<au-htmx>`)
+Use `<au-htmx>` when you prefer a self-contained declarative container for server-swapped regions:
+
+```html
+<!-- Automatically fetches /api/stats on load and swaps innerHTML -->
+<au-htmx from="/api/stats" trigger="load" swap="innerHTML">
+  <p class="placeholder">Loading server partial...</p>
+</au-htmx>
 ```
 
 ---

@@ -4,24 +4,24 @@
 > **Architect & Author:** Sandikodev ([@sandikodev](https://github.com/sandikodev))  
 > **Document Status:** Living Architectural Blueprint & Guiding Principles  
 > **Scope:** `@aureliajs/bridge`, `@aureliajs/islands`, `@hono/aurelia`, `@aureliajs/ssr`  
-> **Mission:** Establish a resilient, unified, and consistent engineering foundation so future development remains strictly aligned.
+> **Mission:** Establish a resilient, unified, and consistent engineering foundation so polyglot interoperability and hydration scheduling remain strictly decoupled, intuitive, and aligned with Aurelia 2 conventions.
 
 ---
 
 ## 1. Background & Problem Statement
 
 In modern enterprise ecosystems, engineering teams rarely build web applications by rewriting 100% of their UI components from scratch. The most frequent operational requirement is **Polyglot Embedding**:
-- Leveraging mature React 19 analytics and charting widgets.
+- Leveraging mature React 19 analytics and charting widgets (e.g., Recharts, AG Grid).
 - Utilizing enterprise design systems built with Vue 3.5 Single-File Components.
 - Integrating high-performance interactive controls authored in Svelte 5 Runes.
-- Adopting server-driven hypermedia slices with HTMX 2.
+- Adopting server-driven hypermedia slices with HTMX 2.0 without full-page reloads.
 
-Since its inception, Aurelia 2 has possessed a deeply flexible, DOM-agnostic architecture. However, a significant gap has existed between the **official documentation patterns** and the **Developer Experience (DX) expectations of enterprise teams**.
+Since its inception, Aurelia 2 has possessed a deeply flexible, DOM-agnostic architecture. However, a significant gap has historically existed between the **official documentation patterns** and the **Developer Experience (DX) expectations of enterprise teams**.
 
 This study presents a comparative analysis across three evolutionary milestones:
 1. **Official Aurelia Documentation (docs.aurelia.io)**
-2. **Ergonomic Community Implementations in `belajar/packages/aurelia-islands` & `belajar/aureliajs`**
-3. **Enterprise Fullstack SSR in `packages/aurelia-bridge` & `examples/fullstack-ssr`**
+2. **Early Community Prototypes & The Conflation of "Islands" vs "Bridges"**
+3. **The Modern Decoupled Architecture (`@aureliajs/bridge` + `@aureliajs/islands`)**
 
 ---
 
@@ -85,215 +85,160 @@ await this.view.activate(this.view, this.$controller, Scope.create(viewModel));
 
 ---
 
-## 3. Case Study 1: Ergonomic DX Validation in `belajar/aureliajs`
+## 3. Case Study 1: The Early Prototype Mistake (Conflating Islands & Bridges)
 
-In the research repository `belajar/packages/aurelia-islands` and its consumption in `belajar/aureliajs`, we demonstrated that the entire surface of the official documentation can be encapsulated within a single universal custom element: `<aurelia-island>`.
+In early research explorations (e.g. `belajar/packages/aurelia-islands`), initial prototypes attempted to solve polyglot embedding under a monolithic custom element named `<aurelia-island>`:
 
-### Architectural Strengths:
-1. **One Declarative Element for Any Framework:**
-   ```html
-   <!-- src/my-app.html -->
-   <aurelia-island 
-     type="react" 
-     component.bind="ReactCounter" 
-     value.bind="sharedCounter" 
-     on-change.bind="handleCounterUpdate">
-   </aurelia-island>
+```html
+<!-- ANTI-PATTERN: Conflating "What" (Bridge) with "When" (Island) -->
+<aurelia-island type="react" component.bind="ReactCounter" value.bind="sharedCounter"></aurelia-island>
+<aurelia-island type="vue" component.bind="VueCounter" value.bind="sharedCounter"></aurelia-island>
+```
 
-   <aurelia-island 
-     type="vue" 
-     component.bind="VueCounter" 
-     value.bind="sharedCounter" 
-     on-change.bind="handleCounterUpdate">
-   </aurelia-island>
-
-   <aurelia-island 
-     type="svelte" 
-     component.bind="SvelteCounter" 
-     value.bind="sharedCounter" 
-     on-change.bind="handleCounterUpdate">
-   </aurelia-island>
-   ```
-
-2. **Clean, Boilerplate-Free ViewModel:**
-   ```typescript
-   // src/my-app.ts
-   export class MyApp {
-     public ReactCounter = ReactCounter;
-     public VueCounter = VueCounter;
-     public SvelteCounter = SvelteCounter;
-     public sharedCounter = 42;
-
-     handleCounterUpdate = (val: number): void => {
-       this.sharedCounter = val;
-     };
-   }
-   ```
-
-3. **Why Developers Value This Pattern:**
-   - **Zero Glue Code:** Eliminates bespoke wrapper classes.
-   - **Direct Reactive Shorthand:** Two-way `value.bind` and `on-change.bind` feel completely natural to Aurelia developers.
-   - **Convention Compliance:** Preserves 100% adherence to separate `.html` views and `.ts` ViewModels.
+### Why Was That Conflation Problematic?
+1. **Category Confusion:**
+   - **Islands Architecture** (as coined by Jason Miller and popularized by Astro) is about **WHEN & HOW** elements hydrate: Zero-JS HTML-first SSR with partial hydration triggers (`load`, `idle`, `visible`, `media`).
+   - **Polyglot Bridge** is about **WHAT** foreign UI runtimes mount inside Aurelia: managing foreign lifecycles, two-way props synchronization, and foreign event bubbling.
+2. **Unnatural Coupling:**
+   - Developers building an Aurelia Single Page Application (SPA) who merely wanted to embed a React chart were forced to load island scheduling infrastructure.
+   - Developers who wanted selective hydration for native Aurelia components could not use it because it was tightly coupled to foreign framework adapters.
+3. **Awkward Configuration:**
+   - Forcing `type="react"` or `using="react"` as an attribute required manual configuration on every tag, violating Aurelia's convention-over-configuration spirit.
 
 ---
 
-## 4. Case Study 2: Critical Post-Mortem of `examples/fullstack-ssr`
+## 4. Case Study 2: The HTMX Category Difference (Hypermedia vs. UI Components)
 
-When transitioning to the monorepo:
-- `@aureliajs/islands` was specialized for **Zero-JS HTML-First SSR & Hydration Scheduling** (Astro-aligned).
-- `@aureliajs/bridge` was engineered for **Polyglot Runtime & Hypermedia Interop** (`<au-bridge>` & `au-htmx`).
+During the evolution of `@aureliajs/bridge`, another critical architectural friction emerged: **How should HTMX fit into the bridge?**
 
-While the underlying primitives were hardened (monotonic `mountEpoch`, container-scoped DI registries, zero-wrapper HTMX), the initial developer experience in `examples/fullstack-ssr` suffered from technical over-complication.
+### The Core Paradigm Difference:
+| Dimension | Client-Side Component Runtimes (React, Vue, Svelte, Solid, Preact, Qwik, Lit) | Hypermedia Transport (HTMX 2.0) |
+| :--- | :--- | :--- |
+| **Primary Unit** | Reusable UI Component (`function` / `class` / `.vue` / `.svelte`) | HTML Document Element (`<button>`, `<form>`, `<section>`) |
+| **Data Contract** | In-memory JavaScript props, state objects, callbacks | Standard HTTP requests (`GET`, `POST`, `PUT`, `DELETE`) |
+| **Rendering Model** | Client-side DOM creation (VDOM, template compiler, reactive signals) | Server-rendered HTML fragments swapped into the live DOM |
+| **State Management**| Local component state + Aurelia two-way binding | Hypermedia as the Engine of Application State (HATEOAS) |
 
-### Architectural Factors Identified:
+### The Anti-Pattern: Treating HTMX as "Framework #7":
+In earlier iterations, HTMX was treated as a 7th framework alongside ReactCounter and VueCounter in a shared counter grid. This was a category error: HTMX does not take a numeric counter prop, nor does it have an in-memory client state store. Forcing a dummy wrapper component (`<htmx-card>`) obscured HTMX's real value.
 
-1. **Shift from Clean Application to Heavy Technical Benchmark:**
-   In `fullstack-ssr/src/routes/showcase.ts`, the `/bridge` route was rendered via raw HTML template strings on the server:
-   ```typescript
-   // ANTI-PATTERN: Violates Aurelia conventions by constructing raw HTML on the server
-   app.get('/bridge', (c) => {
-     return c.html(`<!DOCTYPE html>
-       <html>
-         ...
-         <div id="bridge-app-root"></div>
-         <script id="bridge-manifest-data" type="application/json">${JSON.stringify(manifest)}</script>
-         <script type="module" src="/bridge/app.js"></script>
-       </html>`);
-   });
-   ```
-   This detracted from the core Aurelia experience, forcing developers to manage raw HTML strings and JSON script tags manually.
-
-2. **Benchmarking Complexity Obscuring Core APIs:**
-   The `bridge-app.ts` component was weighed down with gzip wire calculation, Prism syntax highlighting, DOM event logging, and tab-filtering logic. While effective for benchmark demonstrations, it obscured the simplicity of the underlying bridge API.
-
-3. **Loss of Ergonomic Value Shorthand:**
-   Requiring developers to write:
-   ```html
-   <au-bridge
-     using="react"
-     component.bind="loadReact"
-     props.bind="sharedProps"
-     on-event.bind="onReactEvent">
-   </au-bridge>
-   ```
-   forced extra indirection (wrapping component references in loader closures and values in generic prop dictionaries) compared to direct `value.bind="sharedCounter"`.
+### The Clean Solution: Dual-Pillar Architecture:
+`@aureliajs/bridge` cleanly partitions foreign interop into two distinct, respected pillars:
+1. **Client-Side Component Bridge (`<au-react>`, `<au-vue>`, `<au-bridge>`)**: For component-driven UI runtimes with reactive two-way `value.bind` and `props.bind`.
+2. **Server-Driven Hypermedia Bridge (`au-htmx` & `<au-htmx>`)**: For HTTP partial swaps that enhance existing semantic HTML without wrapper divs.
+   - **Crucial Feature — Swapped Fragment Auto-Enhancement:** On `htmx:afterSwap`, the bridge automatically invokes `Aurelia.enhance()` on newly arrived server HTML, ensuring any Aurelia components or bridge elements inside server-rendered partials come to life immediately!
 
 ---
 
-## 5. Unified Architectural Blueprint (Guiding Principles)
+## 5. The Modern Decoupled Architecture
 
-To ensure `@aureliajs/bridge` maintains a resilient, consistent, and intuitive developer experience, four fundamental architectural principles govern the design:
+The monorepo enforces a strict, clean separation of concerns across four specialized packages:
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   AURELIA DEVELOPER EXPERIENCE (DX)                    │
-│                                                                        │
-│   <!-- Mode 1: Direct Component & Value Binding (Fast & Intuitive) --> │
-│   <au-bridge using="react" component.bind="ReactCounter"              │
-│              value.bind="count" on-change.bind="sync">                 │
-│   </au-bridge>                                                         │
-│                                                                        │
-│   <!-- Mode 2: Enterprise Lazy Props (Optimized Code-Splitting) -->    │
-│   <au-bridge using="vue" loader.bind="loadAnalytics"                   │
-│              props.bind="{ id, data }" island="visible">               │
-│   </au-bridge>                                                         │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      FRAMEWORK ADAPTER LAYER                           │
-│     (Automates official docs.aurelia.io patterns without boilerplate)  │
-│                                                                        │
-│  • React Adapter  -> ReactDOM.createRoot + ErrorBoundary + React 19    │
-│  • Vue Adapter    -> createApp + shallowReactive + markRaw             │
-│  • Svelte Adapter -> Svelte 5 mount() + $state proxy                   │
-│  • Solid Adapter  -> render() + Fine-grained signal proxy              │
-│  • HTMX Bridge    -> Zero-wrapper au-htmx custom attribute             │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│               HYDRATION & SSR CORE (@aureliajs/islands)                │
-│                                                                        │
-│  • Pure Aurelia Pages (.aux or .html + .ts) via @hono/aurelia          │
-│  • Zero Raw HTML Strings in Route Handlers                             │
-│  • Synthetic View as Internal Compilation Engine                       │
-└────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            ENTERPRISE APPLICATION                            │
+│                                                                              │
+│  <!-- 1. Dedicated Component Elements with Default Two-Way Value Binding --> │
+│  <au-react component.bind="ReactChart" value.bind="sharedCount"></au-react>  │
+│  <au-vue component.bind="VueGrid" value.bind="sharedCount"></au-vue>        │
+│                                                                              │
+│  <!-- 2. Hypermedia Regions (Native Attribute or Container Tag) -->          │
+│  <section au-htmx hx-get="/api/live-stats" hx-trigger="revealed"></section>  │
+│                                                                              │
+│  <!-- 3. Optional Island Scheduling (When @aureliajs/islands is present) --> │
+│  <au-react island="visible" component.bind="HeavyChart"></au-react>          │
+│  <native-pricing island="idle" tier.bind="enterprise"></native-pricing>      │
+└───────────────────────┬───────────────────────────────┬──────────────────────┘
+                        │                               │
+                        ▼                               ▼
+┌──────────────────────────────────────┐  ┌────────────────────────────────────┐
+│          @aureliajs/bridge           │  │         @aureliajs/islands         │
+│               (WHAT)                 │  │               (WHEN)               │
+│                                      │  │                                    │
+│ • Dedicated: <au-react>, <au-vue>... │  │ • Native `island` Template         │
+│ • Universal: <au-bridge>             │  │   Controller                       │
+│ • Two-Way default `value.bind`       │  │ • Triggers: visible, idle, media,  │
+│ • Automatic Framework Detection      │  │   interaction, load                │
+│ • 7 Built-in Adapters (Lit included) │  │ • Zero-JS SSR Client Loader (~1 KB)│
+│ • Hypermedia: au-htmx & <au-htmx>    │  │ • Works on ANY Aurelia element!    │
+│ • Auto-enhances swapped fragments    │  │ • Synthetic View delay engine      │
+└──────────────────────────────────────┘  └────────────────────────────────────┘
+                        │                               │
+                        └───────────────┬───────────────┘
+                                        ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              @aureliajs/ssr                                  │
+│                 Headless Server-Side Rendering & Hydration                   │
+│                                                                              │
+│ • Request-scoped BrowserPlatform isolation • Strict CSP JSON hydration       │
+│ • LinkeDOM (Workers/Edge) + JSDOM (Node/Bun)• Zero globalThis pollution      │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Principle 1: Zero Raw HTML Strings in Server Routes
-Server routes in Hono or Bun **MUST NOT** render raw HTML strings for bridge views. All views must be pure Aurelia components:
+---
+
+## 6. How `@aureliajs/bridge` & `@aureliajs/islands` Work Together
+
+### A. Zero Hard Dependencies Between Packages
+- `@aureliajs/bridge` does **NOT** import or depend on `@aureliajs/islands`.
+- `@aureliajs/islands` does **NOT** import or depend on `@aureliajs/bridge`.
+
+### B. Pure Orthogonal Composition via Aurelia Template Controllers
+In Aurelia 2, an attribute with `isTemplateController: true` takes complete control over the element's synthetic view factory.
+
+When both plugins are registered in the DI container:
 ```typescript
-// IDIOMATIC & CANONICAL:
-app.get('/bridge', aurelia(BridgePage));
+import Aurelia from 'aurelia';
+import { BridgeConfiguration } from '@aureliajs/bridge';
+import { IslandsConfiguration } from '@aureliajs/islands';
+
+Aurelia
+  .register(BridgeConfiguration, IslandsConfiguration)
+  .app(App)
+  .start();
 ```
-`BridgePage` is authored as an `.aux` file or a paired `bridge-page.ts` + `bridge-page.html`. Server-side rendering is handled transparently by `@hono/aurelia` and `@aureliajs/ssr`.
 
-### Principle 2: Convention-over-Configuration & Dedicated Elements
-`<au-bridge>` eliminates boilerplate through three primary conventions:
-1. **Dedicated Framework Elements with Default Two-Way Value Binding:**
-   ```html
-   <!-- Zero using="..." configuration, zero manual on-change.bind -->
-   <au-react 
-     component.bind="ReactCounter" 
-     value.bind="sharedCounter">
-   </au-react>
+When Aurelia compiles this template:
+```html
+<au-react island="visible" component.bind="RevenueChart" props.bind="chartData"></au-react>
+```
+1. **Compilation Phase:** The Aurelia template compiler recognizes `island` as a Template Controller. It extracts `<au-react>` into a Synthetic View (`IViewFactory`) and replaces the element with a DOM comment render location (`<!--au-loc-->`).
+2. **Scheduling Phase:** `IslandTemplateController` inserts an anchor and observes it with `IntersectionObserver`. `<au-react>` is **not instantiated and not mounted** — 0 KB of React runs.
+3. **Trigger Phase:** When the user scrolls the anchor into view, `IslandTemplateController` activates the synthetic view.
+4. **Mount Phase:** `<au-react>` is attached to the live DOM. Its `attached()` lifecycle executes, dynamic chunk loaders resolve, and React mounts into `<au-react>`!
+5. **Teardown Phase:** If the island is detached, `<au-react>`'s `detaching()` lifecycle cleanly unmounts React.
 
-   <au-vue 
-     component.bind="VueCounter" 
-     value.bind="sharedCounter">
-   </au-vue>
-   ```
-2. **Unified `component.bind` for Code-Splitting & Eager Classes:**
-   ```html
-   <!-- Single unified bindable accepts eager components, promises, or import factories -->
-   <au-react 
-     component.bind="() => import('./react/HeavyChart')" 
-     props.bind="{ theme: 'dark', series: data }" 
-     on-event.bind="handleEvent">
-   </au-react>
-   ```
-3. **Automatic Framework Detection on Universal `<au-bridge>`:**
-   ```html
-   <!-- Automatically detected as Vue 3 SFC via __vccOpts / .vue metadata -->
-   <au-bridge 
-     component.bind="VueCounter" 
-     value.bind="sharedCounter">
-   </au-bridge>
-   ```
-
-### Principle 3: Synthetic Views as Internal Infrastructure
-Synthetic Views (`ViewFactory` + `Scope`) are **internal engine primitives**, not end-user APIs:
-- `@aureliajs/bridge` adapters and `@aureliajs/islands` runtimes use Synthetic Views to isolate reactive scopes without forcing DOM reattachment.
-- Application developers interact exclusively with clean, declarative Aurelia syntax.
-
-### Principle 4: Strict Orthogonal Decoupling
-- **`@aureliajs/bridge` answers "WHAT":**
-  Which framework runtime to mount, how bidirectional state is synchronized, how events cross boundaries, and how instances are deterministically destroyed.
-- **`@aureliajs/islands` answers "WHEN & HOW":**
-  When chunks are downloaded and activated (Zero-JS baseline, `island="visible"`, `island="idle"`, `island="media"`).
-- Both packages compose cleanly by attaching the `island="..."` attribute directly to `<au-bridge>`.
+### C. Developer-Friendly Diagnostic Hint
+If a developer writes:
+```html
+<au-react island="visible" component.bind="Chart"></au-react>
+```
+but forgets to register `IslandsConfiguration`, the bridge detects that the `island` attribute was not consumed by a template controller and logs a helpful diagnostic hint in development mode:
+```
+[@aureliajs/bridge] Note: Element <au-react> has island="visible", but @aureliajs/islands is not registered in this DI container. Register IslandsConfiguration from '@aureliajs/islands' to enable selective hydration scheduling.
+```
 
 ---
 
-## 6. Realized Enhancements & Roadmap Alignment
+## 7. The Guiding Principles of `@aureliajs/bridge`
 
-1. **Dedicated Convention Elements (`<au-react>`, `<au-vue>`, `<au-svelte>`, etc.):**
-   - Direct framework pinning with zero `using="..."` configuration boilerplate.
-2. **Default Two-Way Value Binding (`BindingMode.twoWay`):**
-   - `value.bind` automatically synchronizes bidirectional updates between Aurelia and foreign components without manual `on-change.bind`.
-3. **Automatic Framework Detection Engine (`detectFramework`):**
-   - Automatically detects Vue 3, Svelte 5, Lit, Qwik, and React components from signatures, metadata, and prototypes.
-4. **Single Unified `component.bind` API:**
-   - Unifies eager classes, promises, and dynamic `() => import(...)` loaders under one intuitive bindable.
-5. **HTMX Swapped Fragment Enhancement (`htmx:afterSwap`):**
-   - Automatically invokes Aurelia compilation and enhancement on newly injected hypermedia fragments.
-6. **Smart Selective Vite Optimization:**
-   - Inspects project dependencies to only optimize installed foreign frameworks without missing package errors.
-7. **`packages/aurelia-bridge/example` Canonical Showcase:**
-   - Dedicated polyglot example running React 19, Vue 3, Svelte 5, SolidJS, Preact, Qwik, and HTMX 2.0 in a clean, enterprise-grade application structure.
+### Principle 1: Convention over Configuration (CoC)
+- Use dedicated tags (`<au-react>`, `<au-vue>`, `<au-svelte>`, `<au-solid>`, `<au-preact>`, `<au-qwik>`, `<au-lit>`).
+- If using generic `<au-bridge>`, let `detectFramework` inspect component signatures automatically.
+- Default `value.bind` to two-way (`BindingMode.twoWay`).
+
+### Principle 2: Respect Paradigm Boundaries
+- Client UI component runtimes (React, Vue, Svelte, etc.) take props, manage state, and mount in `<au-bridge>` / `<au-react>`.
+- Hypermedia (HTMX) manages server fragment exchanges on HTML elements (`au-htmx` / `<au-htmx>`).
+- Do not force hypermedia into component prop signatures; do not force component runtimes into HTML string swaps.
+
+### Principle 3: Strict Orthogonal Composition
+- Bridges define **WHAT** runs.
+- Islands define **WHEN** things hydrate.
+- SSR defines **WHERE** HTML is pre-rendered.
+- Each layer does one thing with mathematical precision and composes cleanly through standard Aurelia DI and template controllers.
 
 ---
 
-> *"The best architecture is not the one that adds the most complexity, but the one that conceals the greatest complexity behind the simplest, most intuitive interface."*  
+> *"Architecture is the art of drawing clean boundaries between things that change for different reasons."*  
 > — Sandikodev
