@@ -88,6 +88,7 @@ export class AuBridge {
       { name: 'value', mode: BindingMode.twoWay },
       'using',
       'component',
+      'loader',
       'props',
       'onChange',
       'onUpdate',
@@ -98,6 +99,7 @@ export class AuBridge {
 
   public using?: BridgeFramework;
   public component: BridgeComponentInput = null;
+  public loader?: BridgeComponentInput;
   public props: Record<string, unknown> = {};
   public value?: unknown;
   public onChange?: (val: unknown) => void;
@@ -118,7 +120,11 @@ export class AuBridge {
 
   public getEffectiveFramework(): BridgeFramework {
     if (this.using) return this.using;
-    return detectFramework(this.resolvedComponent ?? this.component);
+    return detectFramework(this.resolvedComponent ?? this.getEffectiveComponentInput());
+  }
+
+  private getEffectiveComponentInput(): BridgeComponentInput {
+    return this.component ?? this.loader ?? null;
   }
 
   private getEffectiveProps(): Record<string, unknown> {
@@ -159,6 +165,13 @@ export class AuBridge {
     }
   }
 
+  async loaderChanged(): Promise<void> {
+    if (this.ssrContext) return;
+    if (this.isAttached) {
+      await this.remountBridge();
+    }
+  }
+
   async usingChanged(): Promise<void> {
     if (this.isAttached) {
       await this.remountBridge();
@@ -184,27 +197,28 @@ export class AuBridge {
 
   private async mountBridge(): Promise<void> {
     const container = this.mountPoint ?? this.host;
-    if (!container || !this.component) return;
+    const input = this.getEffectiveComponentInput();
+    if (!container || !input) return;
 
     const epoch = ++this.mountEpoch;
 
     try {
       let rawLoaded: unknown = null;
-      if (typeof this.component === 'function' && this.component.length === 0) {
+      if (typeof input === 'function' && input.length === 0) {
         try {
-          const res = (this.component as () => unknown)();
+          const res = (input as () => unknown)();
           if (isPromiseLike(res)) {
             rawLoaded = await res;
           } else {
             rawLoaded = res;
           }
         } catch {
-          rawLoaded = this.component;
+          rawLoaded = input;
         }
-      } else if (isPromiseLike(this.component)) {
-        rawLoaded = await this.component;
+      } else if (isPromiseLike(input)) {
+        rawLoaded = await input;
       } else {
-        rawLoaded = this.component;
+        rawLoaded = input;
       }
 
       let resolvedComponent: unknown = rawLoaded;

@@ -352,16 +352,17 @@ export function createQwikAdapter(qwikModule?: QwikLike): BridgeAdapter {
           if (!win.qwikevents) {
             win.qwikevents = ['click', 'input', 'change', 'keydown', 'keyup'];
           }
-          await import('@builder.io/qwik/qwikloader.js');
+          const { QWIK_LOADER } = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER: string };
+          if (QWIK_LOADER) {
+            new Function('document', 'window', 'CustomEvent', QWIK_LOADER)(
+              doc,
+              win,
+              win.CustomEvent ?? (typeof CustomEvent !== 'undefined' ? CustomEvent : null)
+            );
+          }
         } catch {
           try {
-            const { QWIK_LOADER } = (await import('@builder.io/qwik/loader')) as { QWIK_LOADER: string };
-            if (QWIK_LOADER) {
-              const script = doc.createElement('script');
-              script.textContent = QWIK_LOADER;
-              doc.head.appendChild(script);
-              script.remove();
-            }
+            await import('@builder.io/qwik/qwikloader.js');
           } catch {
             // loader not available or simulated mock environment
           }
