@@ -10,7 +10,7 @@
  * - Deterministic DI teardown and monotonic race-safe mounting (mountEpoch)
  */
 
-import { BindingMode, INode, IPlatform, optional, resolve } from 'aurelia';
+import { BindingMode, CustomElement, INode, IPlatform, optional, resolve, type Constructable } from 'aurelia';
 import { ISSRContext } from '@aurelia/runtime-html';
 import {
   IBridgeRegistry,
@@ -439,4 +439,50 @@ export class AuLit extends AuBridge {
   };
 
   public override using: BridgeFramework = 'lit';
+}
+
+function kebabCase(str: string): string {
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+}
+
+/**
+ * Higher-level Convention-over-Configuration factory:
+ * Wraps any foreign component (React, Vue, Svelte, Preact, Solid, Qwik, Lit)
+ * directly into a standard Aurelia 2 Custom Element class.
+ *
+ * @example
+ * // Register React component directly as <pricing-card>
+ * const PricingCardElement = createBridgeElement(ReactPricingCard, 'react', 'pricing-card');
+ * // Now in HTML: <pricing-card value.bind="tier"></pricing-card>
+ */
+export function createBridgeElement(
+  component: unknown,
+  framework: BridgeFramework = 'react',
+  name?: string
+): Constructable {
+  const compName =
+    name ??
+    (typeof component === 'function' && component.name ? kebabCase(component.name) : 'bridge-element');
+
+  return CustomElement.define(
+    {
+      name: compName,
+      template: `<div ref="mountPoint" data-bridge-framework="${framework}"></div>`,
+      bindables: [
+        { name: 'value', mode: BindingMode.twoWay },
+        'props',
+        'onChange',
+        'onUpdate',
+        'onEvent',
+        'onError',
+      ],
+    },
+    class extends AuBridge {
+      public override using = framework;
+      public override component = component;
+    }
+  );
 }

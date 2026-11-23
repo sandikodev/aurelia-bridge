@@ -9,6 +9,7 @@ import {
   BridgeConfiguration,
   BridgeRegistry,
   IBridgeRegistry,
+  createBridgeElement,
   createDefaultBridgeRegistry,
   createPreactAdapter,
   createQwikAdapter,
@@ -438,6 +439,62 @@ describe('@aureliajs/bridge — Polyglot Framework Interop & Hypermedia', () => 
     const customReg = new BridgeRegistry();
     expect(customReg.list()).toEqual([]);
 
+    dom.window.close();
+  });
+
+  it('creates clean standalone Custom Elements via createBridgeElement without <au-bridge> tags', async () => {
+    const { dom, app, host } = createScopedAurelia();
+
+    const mockAdapter = defineBridgeAdapter({
+      framework: 'react',
+      mount(ctx) {
+        const span = dom.window.document.createElement('span');
+        span.className = 'clean-val';
+        span.textContent = String(ctx.props.value ?? '');
+        ctx.container.appendChild(span);
+        return {
+          update(newProps) {
+            span.textContent = String(newProps.value ?? '');
+          },
+          destroy() {
+            span.remove();
+          },
+        };
+      },
+    });
+
+    const registry = createDefaultBridgeRegistry();
+    registry.register(mockAdapter);
+
+    function MyReactCounter(props: { value: number }) {
+      return props;
+    }
+    const CleanCounterElement = createBridgeElement(MyReactCounter, 'react', 'clean-counter');
+
+    const AppShell = CustomElement.define(
+      {
+        name: 'app-shell',
+        template: '<clean-counter value.bind="val"></clean-counter>',
+        dependencies: [CleanCounterElement],
+      },
+      class {
+        val = 99;
+      }
+    );
+
+    app.register(Registration.instance(IBridgeRegistry, registry), CleanCounterElement);
+    const vm = app.container.get(AppShell);
+    await app.app({ host, component: vm }).start();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(host.querySelector('.clean-val')?.textContent).toBe('99');
+
+    vm.val = 100;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(host.querySelector('.clean-val')?.textContent).toBe('100');
+
+    await app.stop();
+    app.dispose();
     dom.window.close();
   });
 });
