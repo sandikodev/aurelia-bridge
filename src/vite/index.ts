@@ -147,25 +147,29 @@ export function bridge(options: BridgeViteOptions = {}): MinimalVitePlugin {
         };
       }
 
-      // 3. SolidJS JSX Components
+      // 3. SolidJS JSX Components (optional Babel transform if present, otherwise delegate to Vite/esbuild)
       if (solid && cleanId.includes('solid') && (cleanId.endsWith('.tsx') || cleanId.endsWith('.jsx'))) {
         if (code.includes('_tmpl$') || code.includes('/*@__PURE__*/')) {
           return null;
         }
-        const babel = await import('@babel/core');
-        delete (Error as unknown as { prepareStackTrace?: unknown }).prepareStackTrace;
-        const transformed = babel.transformSync(code, {
-          filename: cleanId,
-          presets: [
-            '@babel/preset-typescript',
-            ['babel-preset-solid', { generate: 'dom', hydratable: false }],
-          ],
-        });
-        delete (Error as unknown as { prepareStackTrace?: unknown }).prepareStackTrace;
-        return {
-          code: transformed?.code ?? '',
-          map: transformed?.map,
-        };
+        try {
+          const babel = await import('@babel/core');
+          delete (Error as unknown as { prepareStackTrace?: unknown }).prepareStackTrace;
+          const transformed = babel.transformSync(code, {
+            filename: cleanId,
+            presets: [
+              '@babel/preset-typescript',
+              ['babel-preset-solid', { generate: 'dom', hydratable: false }],
+            ],
+          });
+          delete (Error as unknown as { prepareStackTrace?: unknown }).prepareStackTrace;
+          return {
+            code: transformed?.code ?? '',
+            map: transformed?.map,
+          };
+        } catch {
+          return null;
+        }
       }
 
       // 4. Preact TSX/JSX (Automatic JSX Pragma)
