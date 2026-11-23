@@ -39,16 +39,27 @@ export interface MinimalVitePlugin {
   enforce?: 'pre' | 'post';
   config?: (userConfig?: { root?: string }) => Record<string, unknown>;
   transform?: (code: string, id: string) => Promise<{ code: string; map?: unknown } | null>;
-  configureServer?: (server: { middlewares: { use: (route: string, handler: (req: unknown, res: any) => void) => void } }) => void;
+  configureServer?: (server: {
+    middlewares: {
+      use: (
+        route: string,
+        handler: (req: unknown, res: { setHeader(name: string, value: string): void; end(chunk?: unknown): void }) => void
+      ) => void;
+    };
+  }) => void;
 }
 
 function detectDeclaredDependencies(root = process.cwd()): string[] {
   try {
-    const fs = typeof process !== 'undefined' ? (process as any).getBuiltinModule?.('node:fs') ?? null : null;
-    const path = typeof process !== 'undefined' ? (process as any).getBuiltinModule?.('node:path') ?? null : null;
+    const p = typeof process !== 'undefined' ? (process as { getBuiltinModule?: (id: string) => unknown }) : null;
+    const fs = p?.getBuiltinModule ? (p.getBuiltinModule('node:fs') as typeof import('node:fs')) : null;
+    const path = p?.getBuiltinModule ? (p.getBuiltinModule('node:path') as typeof import('node:path')) : null;
     const pkgJsonPath = path ? path.resolve(root, 'package.json') : 'package.json';
     if (fs && fs.existsSync(pkgJsonPath)) {
-      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8')) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
       const declared = new Set([
         ...Object.keys(pkg.dependencies ?? {}),
         ...Object.keys(pkg.devDependencies ?? {}),
@@ -181,7 +192,7 @@ export function bridge(options: BridgeViteOptions = {}): MinimalVitePlugin {
     },
     configureServer(server) {
       if (htmxDevDemo) {
-        server.middlewares.use('/api/htmx-demo', (_req: unknown, res: any) => {
+        server.middlewares.use('/api/htmx-demo', (_req: unknown, res: { setHeader(name: string, value: string): void; end(chunk?: unknown): void }) => {
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.end(`
             <div class="htmx-live-banner">

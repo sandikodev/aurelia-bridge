@@ -336,7 +336,7 @@ export function createQwikAdapter(
     framework: 'qwik',
     async mount(context: BridgeMountContext): Promise<BridgeInstance> {
       if (typeof globalThis !== 'undefined') {
-        (globalThis as any).qRuntimeQrl = true;
+        (globalThis as { qRuntimeQrl?: boolean }).qRuntimeQrl = true;
       }
 
       const qwik = (qwikModule ??
@@ -345,7 +345,11 @@ export function createQwikAdapter(
 
       context.container.innerHTML = '';
       const doc = context.container.ownerDocument;
-      const win = (doc?.defaultView || (typeof window !== 'undefined' ? window : null)) as any;
+      interface QwikWindow {
+        qwikevents?: Array<string | Node>;
+        [key: string]: unknown;
+      }
+      const win = (doc?.defaultView || (typeof window !== 'undefined' ? window : null)) as (Window & QwikWindow) | null;
 
       // Automatically initialize Qwikloader for event delegation (capture listeners).
       // Convention over configuration: Qwik requires qwikloader running on document/window
@@ -502,11 +506,9 @@ export function createLitAdapter(): BridgeAdapter {
       }
 
       const applyProps = (props: Record<string, unknown>) => {
-        for (const [key, val] of Object.entries(props)) {
-          (el as unknown as Record<string, unknown>)[key] = val;
-        }
+        Object.assign(el, props);
         if (context.onEvent) {
-          (el as unknown as { onEvent?: BridgeMountContext['onEvent'] }).onEvent = context.onEvent;
+          (el as Element & { onEvent?: BridgeMountContext['onEvent'] }).onEvent = context.onEvent;
         }
       };
 
